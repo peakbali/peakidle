@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 8;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 9;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -237,6 +237,42 @@ const STATUS = {
 const ELEMENT_STATUS = { fire: "burn", ice: "frozen", wind: "poison", earth: "stun", lightning: "shock" };
 const WEAPON_STATUS_CHANCE = 0.1;
 
+// ---------- Element Mastery (Upgrades panel) ----------
+// One mastery track per element, bought with that element's essence. Mastery is PERMANENT:
+// it stays when you reincarnate, so essence always has somewhere lasting to go.
+// Each level of, say, Fire Mastery:
+//   - makes all your fire damage stronger: fire skills, and attacks and weapon skills with a fire weapon
+//   - makes fire's status effect stronger: higher chance to cause it, and burn/poison hurt more
+// The essence price of the next level = baseCost x growth ^ (levels you already have), rounded up.
+const MASTERY = {
+  max: 25,
+  damage: 0.06,        // +6% damage per level (+150% at level 25)
+  statusChance: 0.04,  // the chance to cause the status goes up 4% of itself per level (never above 100%)
+  dot: 0.05,           // burn and poison damage +5% per level
+  baseCost: 15,        // level 1 costs 15 essences
+  growth: 1.5,         // each level costs 50% more than the last
+};
+const STATUS_ELEMENT = Object.fromEntries(Object.entries(ELEMENT_STATUS).map(([el, st]) => [st, el]));
+
+// ---------- Run Boons (Upgrades panel) ----------
+// Boosts to your stats for THIS RUN ONLY: they reset when you reincarnate (Souls attributes are the
+// permanent ones). Each boon has 10 levels. Level N is paid with the ore of danger level N
+// (level 1 copper, level 5 adamant, level 10 voidsteel) plus essence of the boon's element,
+// so deeper levels open up as you reach the matching ore and boss.
+//   pct: the stat goes up by this share per level (on top of gear and attributes); flat: added per level
+const BOONS = [
+  { id: "hp",      name: "Heartstone Tonic", icon: "❤️", element: "earth",     pct: 0.05, desc: "+5% max HP per level" },
+  { id: "attack",  name: "Ember Whetstone",  icon: "⚔️", element: "fire",      pct: 0.04, desc: "+4% attack per level" },
+  { id: "defense", name: "Frost Rivets",     icon: "🛡️", element: "ice",       pct: 0.04, desc: "+4% defense per level" },
+  { id: "agility", name: "Gale Feather",     icon: "💨", element: "wind",      pct: 0.04, desc: "+4% agility per level" },
+  { id: "luck",    name: "Storm Charm",      icon: "🍀", element: "lightning", flat: 1,   desc: "+1% critical hit chance per level" },
+];
+const BOON_COST = {
+  ore: 150,            // ore for level N = 150 x that ore's costMult (150 copper ... 825 voidsteel)
+  essence: 5,          // essence for level N = 5 x 1.2 ^ (5N - 3): about 5 wins' worth of essence at danger level N
+};
+const boonById = Object.fromEntries(BOONS.map(b => [b.id, b]));
+
 // ---------- Weapon skills ----------
 // Every weapon type has 2 skills of its own. They're free: you can use them whenever a weapon of that
 // type is equipped, next to your 3 element skills. They cost mana like element skills and use your
@@ -444,15 +480,18 @@ function freshState() {
     skillSlots: [null, null, null], // skill ids equipped for battle
     battle: null,         // the fight in progress, saved so a reload can't skip it
     runCoins: 0,          // coins earned since the last reincarnation (gives Souls)
+    boons: {},            // boon id -> level (0-10), this run only
     // Kept when you reincarnate:
     souls: 0,             // Souls to spend on attributes
     attributes: {},       // attribute id -> points bought (0-99)
+    mastery: {},          // element id -> Element Mastery level (permanent)
     reincarnations: 0,    // how many times you've reincarnated (prices go up each time)
     totalSouls: 0,        // all Souls ever earned
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
-  for (const e of ELEMENTS) s.drops[e.id] = 0;
+  for (const e of ELEMENTS) { s.drops[e.id] = 0; s.mastery[e.id] = 0; }
+  for (const bn of BOONS) s.boons[bn.id] = 0;
   for (const o of ORES) {
     s.ore[o.id] = 0;
     s.miners[o.id] = 0;
@@ -520,6 +559,11 @@ function migrate(saved) {
     // now at danger level 5 with the next boss waiting.
     saved.version = 8;
   }
+  if (saved.version < 9) {
+    // v8 -> v9: Element Mastery and Run Boons in the Upgrades panel. Nothing is reset: both start
+    // at level 0 (freshState fills them in).
+    saved.version = 9;
+  }
   // Later versions add their steps here.
   return saved;
 }
@@ -536,7 +580,7 @@ function load() {
     for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved", "runCoins", "souls", "reincarnations", "totalSouls", "bossesBeaten", "tierWins", "nextUid"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
-    for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills", "attributes"]) {
+    for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills", "attributes", "mastery", "boons"]) {
       for (const [k, v] of Object.entries(saved[key] || {})) {
         if (k in s[key]) s[key][k] = v;
       }
@@ -614,7 +658,8 @@ function gearStats() {
   return total;
 }
 
-// The hero's total stats: base stats + equipped gear + Soul attributes. Battles read their numbers from here.
+// The hero's total stats: base stats + equipped gear + Soul attributes, then Run Boons on top.
+// Battles read their numbers from here.
 function heroStats() {
   const total = { ...HERO_BASE_STATS };
   for (const [k, v] of Object.entries(attributeStats())) total[k] += v;
@@ -623,7 +668,47 @@ function heroStats() {
     if (!item) continue;
     for (const [k, v] of Object.entries(recipeById[item.id].stats)) total[k] += v;
   }
+  for (const bn of BOONS) {
+    const lvl = boonLevel(bn.id);
+    if (!lvl) continue;
+    if (bn.pct) total[bn.id] = Math.round(total[bn.id] * (1 + bn.pct * lvl));
+    if (bn.flat) total[bn.id] += bn.flat * lvl;
+  }
   return total;
+}
+
+// ---------- Mastery and boon rules ----------
+
+function masteryLevel(elId) { return (state.mastery && state.mastery[elId]) || 0; }
+function masteryCost(elId) { return Math.ceil(MASTERY.baseCost * Math.pow(MASTERY.growth, masteryLevel(elId))); }
+// Mastery levels locked in for the current fight (older fights in a save have none).
+function battleMastery(elId) {
+  const b = state.battle;
+  return (elId && b && b.mastery && b.mastery[elId]) || 0;
+}
+// Damage multiplier for your hits of this element in the current fight.
+function masteryDamage(elId) { return 1 + MASTERY.damage * battleMastery(elId); }
+// A status chance made stronger by the mastery of the status's element.
+function masteryChance(chance, statusId) {
+  return Math.min(1, chance * (1 + MASTERY.statusChance * battleMastery(STATUS_ELEMENT[statusId])));
+}
+
+function boonLevel(id) { return (state.boons && state.boons[id]) || 0; }
+function boonMaxed(id) { return boonLevel(id) >= ORES.length; }
+// What the next level of a boon costs: { ore, oreAmount, essence }.
+function boonCost(id) {
+  const n = Math.min(ORES.length, boonLevel(id) + 1);
+  const ore = ORES[n - 1];
+  return {
+    ore,
+    oreAmount: Math.ceil(BOON_COST.ore * ore.costMult),
+    essence: Math.max(BOON_COST.essence, Math.ceil(BOON_COST.essence * Math.pow(1.2, 5 * n - 3))),
+  };
+}
+function canBuyBoon(id) {
+  if (boonMaxed(id)) return false;
+  const c = boonCost(id);
+  return state.ore[c.ore.id] >= c.oreAmount && state.drops[boonById[id].element] >= c.essence;
 }
 
 function statsText(stats) {
@@ -872,6 +957,7 @@ function startBattle(uid) {
     hero: { ...hero, element: weaponElement(), weapon: state.equipped.weapon ? state.equipped.weapon.id : null },
     // Skills you brought, with their level, locked in like your stats.
     skills: state.skillSlots.map(id => id ? { id, level: skillLevel(id) } : null),
+    mastery: { ...state.mastery }, // Element Mastery levels, locked in too
     effects: { hero: {}, monster: {} }, // status effects: id -> { turns, dmg, stacks }
     heroHp: hero.hp,
     monsterHp: m.stats.hp,
@@ -933,6 +1019,8 @@ function applyStatus(side, id, srcDamage = 0) {
     battleLog(`${b.monster.name} is ${elementById[b.monster.element].name.toLowerCase()}-born and shrugs off ${st.name.toLowerCase()}.`);
     return false;
   }
+  // Your Fire/Wind Mastery makes the burn/poison you cause hurt more.
+  if (side === "monster") srcDamage *= 1 + MASTERY.dot * battleMastery(STATUS_ELEMENT[id]);
   if (id === "poison") {
     const cur = fx.poison && fx.poison.turns > 0 ? fx.poison : { stacks: 0, dmg: 0 };
     if (cur.stacks >= st.maxStacks) { cur.turns = st.turns; fx.poison = cur; return true; }
@@ -1000,7 +1088,7 @@ function heroAttack(extra = 1, label = "You hit") {
     attackEl: b.hero.element, targetEl: m.element,
     critChance: b.hero.luck / 100,
     dodge: extra === 1 ? dodgeChance(m.stats.agility, b.hero.agility) : 0,
-    extra: extra * damageMult("hero"),
+    extra: extra * damageMult("hero") * masteryDamage(b.hero.element),
   });
   if (hit.dodged) {
     battleLog(`You attack, but ${m.name} dodges!`);
@@ -1010,7 +1098,7 @@ function heroAttack(extra = 1, label = "You hit") {
   b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
   battleLog(`${label} ${m.name} for ${hit.damage}.${hitText(hit)}`);
   battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
-  if (b.hero.element && b.monsterHp > 0 && Math.random() < WEAPON_STATUS_CHANCE) {
+  if (b.hero.element && b.monsterHp > 0 && Math.random() < masteryChance(WEAPON_STATUS_CHANCE, ELEMENT_STATUS[b.hero.element])) {
     applyStatus("monster", ELEMENT_STATUS[b.hero.element], hit.damage);
   }
 }
@@ -1091,12 +1179,12 @@ function castSkill(sk, level, m) {
         attackEl: sk.element, targetEl: m.element,
         critChance: b.hero.luck / 100 + (sk.critBonus || 0),
         dodge: 0,
-        extra: damageMult("hero"),
+        extra: damageMult("hero") * masteryDamage(sk.element),
       });
       b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
       battleLog(`${sk.name} hits ${m.name} for ${hit.damage}.${hitText(hit)}`);
       battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
-      if (sk.status && b.monsterHp > 0 && Math.random() < sk.chance) applyStatus("monster", sk.status, hit.damage);
+      if (sk.status && b.monsterHp > 0 && Math.random() < masteryChance(sk.chance, sk.status)) applyStatus("monster", sk.status, hit.damage);
     }
   }
   if (sk.heal) {
@@ -1137,14 +1225,14 @@ function useWeaponSkill(ws, m) {
     const attack = (b.hero.attack + (ws.usePower ? b.hero.power : 0)) * ws.power;
     const defense = m.stats.defense * (1 - (ws.pierce || 0));
     const status = ws.status || (wEl && ELEMENT_STATUS[wEl]);
-    const chance = ws.status ? ws.chance : wEl ? (ws.elementStatus || WEAPON_STATUS_CHANCE) : 0;
+    const chance = ws.status ? ws.chance : wEl ? masteryChance(ws.elementStatus || WEAPON_STATUS_CHANCE, status) : 0;
     for (let i = 0; i < (ws.hits || 1) && b.monsterHp > 0; i++) {
       const hit = rollHit({
         attack, defense,
         attackEl: wEl, targetEl: m.element,
         critChance: b.hero.luck / 100 + (ws.critBonus || 0),
         dodge: 0,
-        extra: damageMult("hero"),
+        extra: damageMult("hero") * masteryDamage(wEl),
       });
       b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
       battleLog(`${ws.name} hits ${m.name} for ${hit.damage}.${hitText(hit)}`);
@@ -1364,7 +1452,30 @@ function buyAttribute(id) {
   render();
 }
 
-// Start a new run. Keeps skills, skill slots, Souls, attributes and lifetime counters.
+// Level up an element's mastery with its essence. Permanent.
+function buyMastery(elId) {
+  const cost = masteryCost(elId);
+  if (masteryLevel(elId) >= MASTERY.max || state.drops[elId] < cost) return;
+  state.drops[elId] -= cost;
+  state.mastery[elId] = masteryLevel(elId) + 1;
+  log(`${elementById[elId].icon} ${elementById[elId].name} Mastery is now level ${state.mastery[elId]}.`);
+  save();
+  render();
+}
+
+// Level up a Run Boon with ore and essence. Lasts until you reincarnate.
+function buyBoon(id) {
+  if (!canBuyBoon(id)) return;
+  const c = boonCost(id);
+  state.ore[c.ore.id] -= c.oreAmount;
+  state.drops[boonById[id].element] -= c.essence;
+  state.boons[id] = boonLevel(id) + 1;
+  log(`${boonById[id].name} is now level ${state.boons[id]} for this run.`);
+  save();
+  render();
+}
+
+// Start a new run. Keeps skills, skill slots, Souls, attributes, Element Mastery and lifetime counters.
 function reincarnate() {
   if (state.battle) return; // finish the fight first
   const gained = soulsPreview().total;
@@ -1372,6 +1483,7 @@ function reincarnate() {
     skills: state.skills,
     skillSlots: state.skillSlots,
     attributes: state.attributes,
+    mastery: state.mastery,
     souls: state.souls + gained,
     totalSouls: state.totalSouls + gained,
     reincarnations: state.reincarnations + 1,
@@ -2143,8 +2255,8 @@ function buildSouls() {
       <div class="buttons"><button class="danger" data-k="open">Reincarnate…</button></div>
       <div class="confirm" data-k="confirm" hidden>
         <div class="name">Are you sure?</div>
-        <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, all gear (in your bag and equipped), unspent essences, danger level and waiting monsters.</div>
-        <div class="small"><b>You keep:</b> learned skills and their levels, skill slots, Souls and attributes.</div>
+        <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, Run Boons, all gear (in your bag and equipped), unspent essences, danger level and waiting monsters.</div>
+        <div class="small"><b>You keep:</b> learned skills and their levels, skill slots, Element Mastery, Souls and attributes.</div>
         <div class="small"><b>Next run:</b> <span data-k="nextPrices"></span></div>
         <div class="buttons">
           <button class="primary" data-k="yes"></button>
@@ -2191,6 +2303,100 @@ function renderSouls() {
   openBtn.title = state.battle ? "Finish your fight first." : "";
   rb.querySelector('[data-k="confirm"]').hidden = !reincarnateOpen;
   rb.querySelector('[data-k="yes"]').disabled = !!state.battle;
+}
+
+// Upgrades panel: Element Mastery (permanent, essence) and Run Boons (this run, ore + essence).
+function buildMastery(box) {
+  refs.mastery = {};
+  box.appendChild(el(`<h3>Element Mastery</h3>`));
+  box.appendChild(el(`<div class="small up-note">Permanent: mastery stays when you reincarnate. Each level makes that element hit ${Math.round(MASTERY.damage * 100)}% harder (skills, and attacks with a weapon of that element) and makes its status effect stronger.</div>`));
+  for (const e of ELEMENTS) {
+    const st = STATUS[ELEMENT_STATUS[e.id]];
+    const dot = ELEMENT_STATUS[e.id] === "burn" || ELEMENT_STATUS[e.id] === "poison";
+    const card = el(`
+      <div class="card attr up-card" data-el="${e.id}">
+        <div class="row">
+          <span class="name">${e.icon} ${e.name} Mastery <span class="small num">Lv <span data-k="lvl"></span>/${MASTERY.max}</span></span>
+          <span class="stats-line" data-k="bonus"></span>
+        </div>
+        <div class="small">+${Math.round(MASTERY.damage * 100)}% ${e.name.toLowerCase()} damage per level. ${st.icon} ${st.name}: +${Math.round(MASTERY.statusChance * 100)}% chance${dot ? ` and +${Math.round(MASTERY.dot * 100)}% damage` : ""} per level.</div>
+        <div class="buttons">
+          <button class="primary" data-k="buy"></button>
+          <span class="have" data-k="have"></span>
+        </div>
+      </div>`);
+    card.querySelector('[data-k="buy"]').onclick = () => buyMastery(e.id);
+    refs.mastery[e.id] = card;
+    box.appendChild(card);
+  }
+}
+
+function buildBoons(box) {
+  refs.boons = {};
+  box.appendChild(el(`<h3>Run Boons</h3>`));
+  box.appendChild(el(`<div class="small up-note">This run only: boons reset when you reincarnate. Level N costs the ore of danger level N (copper, iron, gold… up to voidsteel) plus essence.</div>`));
+  for (const bn of BOONS) {
+    const e = elementById[bn.element];
+    const card = el(`
+      <div class="card attr up-card boon">
+        <div class="row">
+          <span class="name">${bn.icon} ${bn.name} <span class="small num">Lv <span data-k="lvl"></span>/${ORES.length}</span></span>
+          <span class="stats-line" data-k="bonus"></span>
+        </div>
+        <div class="small">${bn.desc}. Paid with ore and ${e.icon} ${e.drop}.</div>
+        <div class="small boon-price" data-k="price"></div>
+        <div class="buttons">
+          <button class="primary" data-k="buy"></button>
+        </div>
+      </div>`);
+    card.querySelector('[data-k="buy"]').onclick = () => buyBoon(bn.id);
+    refs.boons[bn.id] = card;
+    box.appendChild(card);
+  }
+}
+
+function renderUpgrades() {
+  for (const e of ELEMENTS) {
+    const card = refs.mastery[e.id];
+    const lvl = masteryLevel(e.id);
+    set(card, "lvl", String(lvl));
+    set(card, "bonus", lvl > 0 ? `+${Math.round(lvl * MASTERY.damage * 100)}% dmg` : "");
+    const btn = card.querySelector('[data-k="buy"]');
+    const maxed = lvl >= MASTERY.max;
+    const cost = masteryCost(e.id);
+    const have = state.drops[e.id] || 0;
+    const label = maxed ? "Maxed" : `Level up for ${fmt(cost)} ${e.icon}`;
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.disabled = maxed || have < cost;
+    set(card, "have", maxed ? "" : `you have ${fmt(have)} ${e.icon}`);
+    const haveEl = card.querySelector('[data-k="have"]');
+    haveEl.classList.toggle("enough", have >= cost);
+    haveEl.classList.toggle("short", have < cost);
+  }
+  for (const bn of BOONS) {
+    const card = refs.boons[bn.id];
+    const lvl = boonLevel(bn.id);
+    const e = elementById[bn.element];
+    set(card, "lvl", String(lvl));
+    set(card, "bonus", lvl > 0 ? (bn.pct ? `+${Math.round(lvl * bn.pct * 100)}%` : `+${lvl * bn.flat}%`) : "");
+    const btn = card.querySelector('[data-k="buy"]');
+    const price = card.querySelector('[data-k="price"]');
+    if (boonMaxed(bn.id)) {
+      if (btn.textContent !== "Maxed") btn.textContent = "Maxed";
+      btn.disabled = true;
+      price.hidden = true;
+      continue;
+    }
+    const c = boonCost(bn.id);
+    const oreOk = state.ore[c.ore.id] >= c.oreAmount;
+    const essOk = state.drops[bn.element] >= c.essence;
+    const label = `Buy level ${lvl + 1}`;
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.disabled = !(oreOk && essOk);
+    price.hidden = false;
+    const html = `Needs <span class="${oreOk ? "enough" : "short"}">${fmt(c.oreAmount)} ${c.ore.name.toLowerCase()}</span> + <span class="${essOk ? "enough" : "short"}">${fmt(c.essence)} ${e.icon}</span> (you have ${fmt(state.ore[c.ore.id])} and ${fmt(state.drops[bn.element])})`;
+    if (price.innerHTML !== html) price.innerHTML = html;
+  }
 }
 
 function buildUI() {
@@ -2248,6 +2454,7 @@ function buildUI() {
 
   const upBox = document.getElementById("upgrades");
   upBox.innerHTML = "";
+  upBox.appendChild(el(`<h3>Tools</h3>`));
   refs.pickaxe = el(`
     <div class="card">
       <div class="name">⛏️ Better pickaxe (level <span data-k="lvl"></span>)</div>
@@ -2268,6 +2475,9 @@ function buildUI() {
 
   refs.smithed = el(`<div class="small">Items smithed so far: <span data-k="total"></span></div>`);
   upBox.appendChild(refs.smithed);
+
+  buildMastery(upBox);
+  buildBoons(upBox);
 
   render();
 }
@@ -2366,6 +2576,7 @@ function render() {
   refs.anvil.querySelector('[data-k="buy"]').disabled = state.coins < anvilCost();
 
   set(refs.smithed, "total", fmt(state.totalSmithed));
+  renderUpgrades();
 
   renderAdventure();
   renderMerchant();
@@ -2377,6 +2588,8 @@ function render() {
     const parts = [];
     if (gear[st.id] > 0) parts.push(`+${fmt(gear[st.id])} gear`);
     if (attrs[st.id] > 0) parts.push(`+${fmt(attrs[st.id])} souls`);
+    const boon = hero[st.id] - HERO_BASE_STATS[st.id] - gear[st.id] - (attrs[st.id] || 0);
+    if (boon > 0) parts.push(`+${fmt(boon)} boons`);
     set(refs.stats[st.id], "total", fmt(hero[st.id]) + (st.id === "luck" ? "%" : ""));
     set(refs.stats[st.id], "bonus", parts.length ? `(${parts.join(", ")})` : "");
   }
