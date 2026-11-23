@@ -766,7 +766,7 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
 
 @media (max-width: 700px) {
   /* Room at the bottom so the tab bar never covers anything. */
-  body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+  body { padding-bottom: 66px; }
 
   /* Header on phones, two parts that always fit on screen (no swiping):
      top line: (Menu) logo ... coins, Souls, gear
@@ -861,13 +861,22 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
   }
   .dash-badge[hidden] { display: none; }
 
-  /* Tab bar fixed to the bottom: big icons, tiny labels, the open tab lit up. */
+  /* Tab bar fixed to the bottom: big icons, tiny labels, the open tab lit up.
+     It always has the same fixed height. It used to add the phone's "safe area"
+     (env(safe-area-inset-bottom)) as extra padding, but Chrome on Android
+     sometimes reports the system navigation bar's height there (when the
+     address bar shows/hides or the page changes), which made the bar suddenly
+     grow with an empty band under the labels. This page never draws under the
+     system bars, so that extra room is never needed. */
   .tabbar {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
+    grid-template-rows: 100%;
     position: fixed; left: 0; right: 0; bottom: 0;
     z-index: 5;
-    padding: 5px 2px calc(5px + env(safe-area-inset-bottom));
+    height: 60px;
+    overflow: hidden;
+    padding: 5px 2px;
     background:
       repeating-linear-gradient(180deg, transparent 0 7px, rgba(0, 0, 0, 0.12) 7px 8px),
       linear-gradient(180deg, #3d2818, #2a1b10);
