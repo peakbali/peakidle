@@ -3023,14 +3023,29 @@ function start() {
   window.addEventListener("beforeunload", save);
   document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
 
-  // Reset lives in the settings menu (gear in the top bar) and asks once more before erasing.
+  // Reset lives in the settings menu (gear in the top bar) as a small link. It opens a window
+  // where you must type "reset" before the Reset button wakes up, so a stray tap can't erase a save.
   const resetConfirm = document.getElementById("reset-confirm");
-  document.getElementById("reset").onclick = () => { resetConfirm.hidden = false; };
-  document.getElementById("reset-no").onclick = () => { resetConfirm.hidden = true; };
-  document.getElementById("reset-yes").onclick = () => {
-    resetConfirm.hidden = true;
+  const resetInput = document.getElementById("reset-input");
+  const resetYes = document.getElementById("reset-yes");
+  const resetTyped = () => resetInput.value.trim().toLowerCase() === "reset";
+  const closeReset = () => { resetConfirm.hidden = true; resetInput.value = ""; resetYes.disabled = true; };
+  document.getElementById("reset").onclick = () => {
     document.getElementById("settings-pop").hidden = true;
     document.getElementById("settings-btn").setAttribute("aria-expanded", "false");
+    resetInput.value = "";
+    resetYes.disabled = true;
+    resetConfirm.hidden = false;
+    resetInput.focus();
+  };
+  resetInput.oninput = () => { resetYes.disabled = !resetTyped(); };
+  resetInput.onkeydown = e => { if (e.key === "Enter" && resetTyped()) resetYes.click(); };
+  document.getElementById("reset-no").onclick = closeReset;
+  resetConfirm.onclick = e => { if (e.target === resetConfirm) closeReset(); }; // tap outside = cancel
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !resetConfirm.hidden) closeReset(); });
+  resetYes.onclick = () => {
+    if (!resetTyped()) return; // never erase unless the word was typed
+    closeReset();
     reincarnateOpen = false;
     const profile = state.profile; // your hero's look isn't progress, so it stays
     state = freshState();

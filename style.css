@@ -189,7 +189,38 @@ header.hud {
 .settings-pop h3 { margin: 0; }
 .settings-pop .row { font-size: 14px; }
 .settings-pop p { margin: 0; }
-.settings-pop .confirm { margin-top: 0; }
+/* Reset game: a small, quiet text link at the bottom of settings (not a big red button) */
+.settings-pop .reset-link {
+  justify-self: center; margin-top: 4px; padding: 2px 6px;
+  background: none; box-shadow: none; border: 0;
+  font-size: 13px; color: var(--muted); opacity: 0.7; text-decoration: underline;
+}
+.settings-pop .reset-link:hover { opacity: 1; color: #ff8f78; filter: none; }
+.settings-pop .reset-link:active { transform: none; box-shadow: none; }
+
+/* "Are you sure? Type reset" window */
+.reset-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(6, 4, 3, 0.8);
+}
+.reset-card {
+  width: min(380px, 100%); padding: 14px 16px 16px; display: grid; gap: 8px;
+  background-color: var(--stone); background-image: var(--stone-tex); box-shadow: var(--frame);
+}
+.reset-card h3 { margin: 0; font-family: var(--px); font-size: 30px; font-weight: normal; color: #ff8f78; }
+.reset-card p { margin: 0; }
+.reset-card label { font-size: 14px; margin-top: 4px; }
+.reset-card label b { color: #ff8f78; }
+.reset-input {
+  font: inherit; font-family: var(--px); font-size: 24px; color: var(--text);
+  background: var(--stone-dark); border: 2px solid var(--outline); padding: 3px 8px; width: 100%;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+.reset-input::placeholder { color: var(--muted); opacity: 0.45; }
+.reset-input:focus { outline: 2px solid var(--accent-hi); outline-offset: 1px; }
+.reset-actions { margin-top: 4px; justify-content: flex-end; }
+.reset-actions button { min-width: 100px; min-height: 40px; }
 
 /* ---------- Layout: all 7 panels side by side in ONE row ----------
    Each panel scrolls up and down on its own, so the page itself never

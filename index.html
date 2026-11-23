@@ -42,18 +42,26 @@
           <p id="install-text" class="small"></p>
           <button id="install-btn" class="primary" type="button" hidden>Install app</button>
         </div>
-        <button id="reset" class="danger" type="button">Reset game…</button>
-        <div id="reset-confirm" class="confirm" hidden>
-          <div class="name">Erase everything?</div>
-          <div class="small">This deletes ALL your progress, including Souls, attributes and skills. To start a new run and keep them, use Reincarnate in the Souls panel instead.</div>
-          <div class="buttons">
-            <button id="reset-yes" class="danger" type="button">Yes, erase it all</button>
-            <button id="reset-no" type="button">No, keep playing</button>
-          </div>
-        </div>
+        <!-- Kept small and quiet on purpose, so nobody taps it by accident -->
+        <button id="reset" class="reset-link" type="button">Reset game</button>
       </div>
     </div>
   </header>
+
+  <!-- "Are you sure?" window for Reset game: you must type the word reset before it will erase anything -->
+  <div id="reset-confirm" class="reset-overlay" hidden>
+    <div class="reset-card" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+      <h3 id="reset-title">Are you sure?</h3>
+      <p>This erases <b>all</b> your progress: ore, gear, coins, Souls, attributes and skills. It can't be undone.</p>
+      <p class="small">Just want a fresh run? Use Reincarnate in the Souls panel instead. You keep your Souls and skills.</p>
+      <label for="reset-input">Type <b>reset</b> to continue</label>
+      <input id="reset-input" class="reset-input" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="reset">
+      <div class="buttons reset-actions">
+        <button id="reset-no" class="primary" type="button">Cancel</button>
+        <button id="reset-yes" class="danger" type="button" disabled>Reset</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Phone-only main menu: tap a tile to open that panel. Hidden on bigger screens. -->
   <nav id="dashboard" class="dashboard" aria-label="Main menu"></nav>
@@ -142,17 +150,17 @@
   <div id="gear-picker" class="av-overlay" hidden></div>
   <div id="bestiary" class="av-overlay" hidden></div>
 
-  <script src="icons.js?v=37"></script>
-  <script src="avatar.js?v=37"></script>
-  <script src="ores-art.js?v=37"></script>
-  <script src="gear-art.js?v=37"></script>
-  <script src="skill-art.js?v=37"></script>
-  <script src="monster-art.js?v=37"></script>
-  <script src="zone-art.js?v=37"></script>
+  <script src="icons.js?v=39"></script>
+  <script src="avatar.js?v=39"></script>
+  <script src="ores-art.js?v=39"></script>
+  <script src="gear-art.js?v=39"></script>
+  <script src="skill-art.js?v=39"></script>
+  <script src="monster-art.js?v=39"></script>
+  <script src="zone-art.js?v=39"></script>
   <script src="dwarves.js?v=39"></script>
   <script src="game.js?v=39"></script>
-  <script src="info-pop.js?v=37"></script>
-  <script src="menu.js?v=37"></script>
-  <script src="pwa.js?v=38"></script>
+  <script src="info-pop.js?v=39"></script>
+  <script src="menu.js?v=39"></script>
+  <script src="pwa.js?v=39"></script>
 </body>
 </html>
