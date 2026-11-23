@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -21,6 +21,10 @@
       <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" aria-expanded="false" aria-controls="settings-pop"><span class="px-slot" data-icon="gear"></span></button>
       <div id="settings-pop" class="settings-pop" hidden>
         <h3>Your game</h3>
+        <button class="profile-card" type="button" data-edit-profile title="Change your hero's name and look">
+          <span class="profile-portrait" data-profile-portrait></span>
+          <span class="profile-text"><span class="profile-name num" data-profile-name>Hero</span><span class="small">Tap to change your look</span></span>
+        </button>
         <div class="row"><span>Reincarnations</span><b class="num" data-k="lives">0</b></div>
         <div class="row"><span>Prices</span><b class="num">×<span data-k="priceMult">1.00</span></b></div>
         <p class="small">Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do. The game saves by itself every few seconds.</p>
@@ -60,6 +64,10 @@
     <section class="panel" id="panel-hero" data-panel="hero">
       <h2>Hero</h2>
       <details class="hint"><summary>How it works</summary><p>Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility. Each weapon type comes with 2 weapon skills for battle.</p></details>
+      <button class="profile-card" type="button" data-edit-profile title="Change your hero's name and look">
+        <span class="profile-portrait" data-profile-portrait></span>
+        <span class="profile-text"><span class="profile-name num" data-profile-name>Hero</span><span class="small">Tap to change your look</span></span>
+      </button>
       <div id="hero-stats" class="hero-stats"></div>
       <h3>Equipment</h3>
       <div id="hero-slots"></div>
@@ -111,10 +119,14 @@
   <!-- Battle screen: takes over the whole screen while you fight (filled in by game.js) -->
   <div id="battle" class="battle-screen" role="dialog" aria-modal="true" aria-label="Battle" hidden></div>
 
-  <script src="icons.js?v=20"></script>
-  <script src="ores-art.js?v=20"></script>
-  <script src="dwarves.js?v=20"></script>
-  <script src="game.js?v=20"></script>
-  <script src="menu.js?v=20"></script>
+  <!-- Appearance editor: your hero's name and look (filled in by avatar.js) -->
+  <div id="avatar-editor" class="av-overlay" hidden></div>
+
+  <script src="icons.js?v=21"></script>
+  <script src="avatar.js?v=21"></script>
+  <script src="ores-art.js?v=21"></script>
+  <script src="dwarves.js?v=21"></script>
+  <script src="game.js?v=21"></script>
+  <script src="menu.js?v=21"></script>
 </body>
 </html>
