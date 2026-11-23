@@ -419,30 +419,93 @@ button.glow { animation: afford-glow 0.9s ease-out 2; }
 }
 
 /* ---------- Mine ---------- */
-/* Each mine row: dwarf top left, ore name under it, a big ore button on the
-   right, then the miner numbers and the hire button across the whole row. */
+/* Each mine is its own box, tinted with that ore's color. Top part: the dwarf,
+   ore name and miner numbers on the left, the big ore button on the right
+   (dwarf top = button top, miner line bottom = button bottom). Under it the
+   Hire button runs the whole width. */
 .ore-card {
+  --ore: 200, 120, 70;          /* the ore's color as r, g, b (set per ore below) */
+  --ob: 128px;                  /* big ore button size */
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "dwarf btn"
-    "title btn"
-    "stats stats"
-    "hire  hire";
-  column-gap: 10px;
-  align-items: center;
+    "info btn"
+    "hire hire";
+  column-gap: 12px;
+  row-gap: 10px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 2px solid rgba(var(--ore), 0.38);
+  background:
+    linear-gradient(180deg, rgba(var(--ore), 0.16), rgba(var(--ore), 0.07)),
+    #1a1410;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 235, 200, 0.06),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.35),
+    0 3px 0 rgba(0, 0, 0, 0.45);
 }
-.ore-card .ore-dwarf { grid-area: dwarf; container-type: inline-size; min-width: 0; }
-.ore-card .ore-btn { grid-area: btn; align-self: start; }
-.ore-card .ore-title { grid-area: title; align-self: end; margin-top: 4px; }
-.ore-card .ore-stats { grid-area: stats; margin-top: 6px; }
-.ore-card .ore-hire { grid-area: hire; }
-.ore-btn {
-  width: 128px;
-  height: 128px;
+.ore-card:last-child { margin-bottom: 0; box-shadow: inset 2px 2px 0 rgba(255, 235, 200, 0.06), inset -2px -2px 0 rgba(0, 0, 0, 0.35), 0 3px 0 rgba(0, 0, 0, 0.45); }
+.ore-card + .card.locked { margin-top: 4px; }
+
+.ore-card[data-ore="copper"]     { --ore: 214, 116, 62; }
+.ore-card[data-ore="iron"]       { --ore: 176, 184, 196; }
+.ore-card[data-ore="gold"]       { --ore: 232, 184, 64; }
+.ore-card[data-ore="mithril"]    { --ore: 84, 160, 232; }
+.ore-card[data-ore="adamant"]    { --ore: 64, 186, 96; }
+.ore-card[data-ore="obsidian"]   { --ore: 150, 84, 214; }
+.ore-card[data-ore="moonsilver"] { --ore: 170, 186, 236; }
+.ore-card[data-ore="sunstone"]   { --ore: 246, 128, 48; }
+.ore-card[data-ore="starmetal"]  { --ore: 240, 222, 110; }
+.ore-card[data-ore="voidsteel"]  { --ore: 116, 72, 190; }
+
+/* Left side: as tall as the ore button. Dwarf at the top, numbers at the bottom. */
+.ore-card .ore-info {
+  grid-area: info;
+  min-width: 0;
+  height: var(--ob);
+  display: flex;
+  flex-direction: column;
+}
+.ore-card .ore-dwarf { flex: 1 1 0; min-height: 0; display: flex; }
+.ore-card .dwarf-box { flex: none; height: 100%; }
+/* The dwarf grows to fill the space above the text (the picture is 28 x 22). */
+.ore-card .dwarf { height: 100%; width: auto; aspect-ratio: 28 / 22; max-width: 100%; }
+.ore-card .ore-info { container-type: inline-size; }
+.ore-card .ore-title { flex: none; margin-top: 4px; overflow-wrap: anywhere; }
+/* Not much room beside the button (desktop columns, small phones): the amount
+   always gets its own line, so every dwarf in the list is the same size. */
+@container (max-width: 190px) {
+  .ore-card .ore-title { font-size: 17px; }
+  .ore-card .ore-title .num { display: block; margin-top: 1px; }
+  .ore-card .ore-stats { font-size: 12px; }
+}
+@container (max-width: 140px) {
+  .ore-card .ore-title { font-size: 15px; }
+}
+
+.ore-card .ore-stats { flex: none; margin-top: 3px; line-height: 1.2; }
+.ore-card .ore-stats span { color: var(--text); }
+
+.ore-card .ore-btn {
+  grid-area: btn;
+  width: var(--ob);
+  height: var(--ob);
   padding: 0;
-  --btn-bg: #1d1612;
+  --btn-bg: rgba(10, 7, 5, 0.55);
+  border-color: rgba(0, 0, 0, 0.75);
+}
+.ore-card .ore-hire { grid-area: hire; }
+.ore-card .ore-hire button { display: block; width: 100%; padding: 7px 10px; white-space: nowrap; }
+
+/* Very narrow desktop columns: no room side by side, so stack it all. */
+#ores { container: ores / inline-size; }
+@container ores (max-width: 240px) {
+  .ore-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "info" "btn" "hire"; }
+  .ore-card .ore-info { height: auto; }
+  .ore-card .ore-dwarf { flex: none; height: 52px; }
+  .ore-card .ore-btn { width: 100%; height: 100px; }
+  .ore-card .ore-hire button { font-size: 14px; padding: 6px 4px; }
 }
 .float-num {
   position: absolute;
@@ -1070,12 +1133,9 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
 /* ---------- Dwarf miners (Mine panel) ----------
    One pixel-art dwarf per opened mine, drawn by dwarves.js. The mining moves
    themselves are built in dwarves.js; here are the sizes and the sleeping look. */
-.dwarf-box { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.dwarf-box { display: flex; align-items: flex-start; min-width: 0; }
 .dwarf { flex: none; width: 84px; height: 66px; --dur: 1.6s; }
 .dw-svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.dw-caption { line-height: 1.3; }
-.dw-speed { color: var(--text); font-weight: 600; }
-.dwarf-box[data-speed="10"] .dw-speed { color: var(--accent); }
 .dw-tool, .dw-body, .dw-rock, .dw-spark, .dw-z, .dw-bit {
   transform-box: view-box;
 }
@@ -1109,23 +1169,16 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
   .dwarf:not(.sleep) .dw-tool { transform: rotate(-20deg); }
 }
 
-/* Phones: slightly smaller dwarves */
-@media (max-width: 700px) {
-  .dwarf { width: 70px; height: 55px; }
-}
-
-/* Desktop columns are narrow: a slightly smaller ore button and dwarf */
+/* Desktop columns are narrow: a slightly smaller ore button */
 @media (min-width: 701px) {
-  .ore-card .ore-btn { width: 108px; height: 108px; }
-  .ore-card .ore-btn .ore-art { width: 72px; height: 72px; }
-  .ore-card { column-gap: 8px; }
-  .dwarf-box { gap: 6px; }
-  .dwarf { width: 72px; height: 57px; }
+  .ore-card { --ob: clamp(96px, 40cqw, 116px); column-gap: 10px; padding: 8px; }
+  .ore-card .ore-btn .ore-art { width: 74px; height: 74px; }
 }
 
-/* Not much room beside the dwarf (desktop, small phones): speed text goes under it */
-@container (max-width: 170px) {
-  .dwarf-box { flex-direction: column; align-items: flex-start; gap: 2px; }
+/* Very small phones: smaller button so the name still fits beside it */
+@media (max-width: 340px) {
+  .ore-card { --ob: 104px; column-gap: 8px; padding: 8px; }
+  .ore-card .ore-btn .ore-art { width: 68px; height: 68px; }
 }
 
 /* Pixel-art ore pictures (drawn in ores-art.js). Sized to the text around them. */
