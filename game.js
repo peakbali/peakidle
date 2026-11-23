@@ -413,11 +413,12 @@ function monsterStats(tier, boss) {
 function spawnMonster(sp) {
   const c = TIERS[sp.tier - 1].creatures[sp.creature];
   return { uid: sp.uid, tier: sp.tier, boss: false, element: sp.element,
-    name: `${ELEMENT_ADJECTIVE[sp.element]} ${c.name}`, icon: c.icon, ...monsterStats(sp.tier, false) };
+    name: `${ELEMENT_ADJECTIVE[sp.element]} ${c.name}`, icon: c.icon, art: c.name.toLowerCase().replace(/ /g, "_"),
+    ...monsterStats(sp.tier, false) };
 }
 function bossMonster(tier) {
   const b = TIERS[tier - 1].boss;
-  return { uid: "boss", tier, boss: true, element: b.element, name: b.name, icon: b.icon, ...monsterStats(tier, true) };
+  return { uid: "boss", tier, boss: true, element: b.element, name: b.name, icon: b.icon, art: b.id, ...monsterStats(tier, true) };
 }
 
 // Old saves (before random spawns) used a fixed ladder. Only needed to work out the tier of an old save.
@@ -1352,6 +1353,7 @@ function endBattle(result) {
       if (m.tier === currentTier() && !peakCleared()) {
         state.bossesBeaten += 1;
         state.tierWins = 0;
+        b.tierUp = currentTier(); // shown in the victory window
         if (peakCleared()) battleLog(`You conquered the ${TIERS[TIERS.length - 1].name}! Reincarnate in the Souls panel for a big Souls reward.`);
         else {
           const t = TIERS[currentTier() - 1];
@@ -1715,26 +1717,102 @@ function fmtTime(ms) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// One monster card for the Adventure panel.
-function monsterCard(m) {
+// The reward for beating a monster, as one line of text.
+function rewardText(m) {
   const e = elementById[m.element];
-  const weak = elementById[weaknessOf(m.element)];
-  const strong = elementById[strengthOf(m.element)];
-  const lower = !m.boss && m.tier < currentTier();
+  return `${m.reward.drops} ${e.icon} ${e.drop} + ${fmt(m.reward.coins)} 🪙`;
+}
+
+// "Weak ⚡ Lightning · Resists ❄️ Ice" and the monster's stats, kept short so cards stay small.
+function weakLine(m) {
+  const weak = elementById[weaknessOf(m.element)], strong = elementById[strengthOf(m.element)];
+  return `<div class="small mon-line"><span title="Weak to ${weak.name}: your ${weak.name} skills do extra damage">Weak ${weak.icon} ${weak.name}</span>
+    <span title="Resists ${strong.name}: your ${strong.name} skills do less damage">Resists ${strong.icon} ${strong.name}</span></div>`;
+}
+function statsLine(m) {
+  return `<div class="small mon-line"><span title="HP">❤️ ${fmt(m.stats.hp)}</span><span title="Attack">⚔️ ${fmt(m.stats.attack)}</span>
+    <span title="Defense">🛡️ ${fmt(m.stats.defense)}</span><span title="Agility">💨 ${fmt(m.stats.agility)}</span></div>`;
+}
+
+// A little treasure chest. Tap it (or hover on a computer) to see what a monster gives when you win.
+function chestButton(m) {
+  return `<button class="chest-btn" data-k="chest" title="Win: ${rewardText(m)}" aria-label="Show rewards">${chestSVG()}</button>`;
+}
+
+// One monster card for the Adventure panel: a big picture on the left, the details on the right.
+function monsterCard(m) {
+  const lower = m.tier < currentTier();
   const card = el(`
-    <div class="card monster${m.boss ? " boss" : ""}">
-      <div class="row">
-        <span class="name">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}
-          <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></span>
-        ${elementTag(m.element)}
+    <div class="card monster mon-card">
+      <div class="mon-pic mon-bg-${m.element}">${monsterArtHTML(m)}</div>
+      <div class="mon-body">
+        <div class="mon-name"><span class="name">${m.name}</span>
+          <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></div>
+        <div class="mon-tags">${elementTag(m.element)}${chestButton(m)}</div>
+        <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}</div>
+        ${weakLine(m)}
+        ${statsLine(m)}
+        <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
       </div>
-      <div class="small">Weak to ${weak.icon} ${weak.name} · resists ${strong.icon} ${strong.name}</div>
-      <div class="small">❤️ ${fmt(m.stats.hp)} · ⚔️ ${fmt(m.stats.attack)} · 🛡️ ${fmt(m.stats.defense)} · 💨 ${fmt(m.stats.agility)}</div>
-      <div class="small">Win: ${m.reward.drops} ${e.icon} ${e.drop} + ${fmt(m.reward.coins)} 🪙</div>
-      <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
     </div>`);
-  card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.uid);
+  wireMonsterCard(card, m);
   return card;
+}
+
+function wireMonsterCard(card, m) {
+  card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.uid);
+  const chest = card.querySelector('[data-k="chest"]');
+  const reward = card.querySelector('[data-k="reward"]');
+  chest.onclick = () => {
+    reward.hidden = !reward.hidden;
+    chest.classList.toggle("open", !reward.hidden);
+  };
+}
+
+// Sparks that float up around a boss, in its element's color.
+function bossParticles(n) {
+  return Array.from({ length: n }, (_, i) =>
+    `<i style="--x:${Math.round(6 + (i * 37) % 88)}%;--d:${(i * 0.53) % 3.2}s;--s:${2.6 + (i % 4) * 0.5}s"></i>`).join("");
+}
+
+// The boss gets the whole width of the panel: big animated picture, name, description and backstory.
+function bossShowcase(m) {
+  const info = BOSS_ART[m.art] || {};
+  const next = TIERS[m.tier];
+  const card = el(`
+    <div class="boss-show mon-bg-${m.element}">
+      <div class="boss-top"><span class="tag boss-tag">Boss</span><span class="tag">Lv ${m.tier}</span>${elementTag(m.element)}</div>
+      <div class="boss-stage">
+        <div class="boss-aura"></div>
+        <div class="boss-sparks">${bossParticles(14)}</div>
+        ${monsterArtHTML(m)}
+      </div>
+      <div class="boss-name">${m.name}</div>
+      ${info.title ? `<div class="boss-title">${info.title}</div>` : ""}
+      ${info.desc ? `<div class="boss-desc">${info.desc}</div>` : ""}
+      ${info.story ? `<div class="boss-story">${info.story}</div>` : ""}
+      <div class="boss-facts">
+        ${weakLine(m)}
+        ${statsLine(m)}
+      </div>
+      <div class="mon-tags boss-loot">${chestButton(m)}<span class="small">Tap the chest to see the rewards</span></div>
+      <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}${next ? ` + opens ${next.icon} ${next.name}` : ""}</div>
+      <button data-k="fight" class="primary big wide boss-fight">⚔️ Fight the boss</button>
+    </div>`);
+  wireMonsterCard(card, m);
+  return card;
+}
+
+// After the last boss: it stays on show, beaten.
+function bossConquered() {
+  const last = TIERS[TIERS.length - 1];
+  const m = bossMonster(TIERS.length);
+  return el(`
+    <div class="boss-show beaten mon-bg-${m.element}">
+      <div class="boss-stage"><div class="boss-aura"></div>${monsterArtHTML(m)}<div class="boss-trophy">🏆</div></div>
+      <div class="boss-name">${m.name} is defeated</div>
+      <div class="boss-desc">The ${last.icon} ${last.name} is yours! Reincarnate in the Souls panel for a big Souls reward and climb again.</div>
+    </div>`);
 }
 
 // What the Adventure panel was last built for, so it only rebuilds when monsters change.
@@ -1776,10 +1854,9 @@ function buildAdventure() {
 
   box.appendChild(el(`<h3>Boss</h3>`));
   if (peakCleared()) {
-    const last = TIERS[TIERS.length - 1].boss;
-    box.appendChild(el(`<div class="card boss small">🏆 ${last.icon} ${last.name} is defeated. The ${TIERS[TIERS.length - 1].name} is yours!</div>`));
+    box.appendChild(bossConquered());
   } else {
-    const card = monsterCard(bossMonster(currentTier()));
+    const card = bossShowcase(bossMonster(currentTier()));
     refs.monsters.push(card);
     box.appendChild(card);
   }
@@ -1794,7 +1871,7 @@ function renderAdventure() {
     : `Next in ${fmtTime(Math.max(0, state.nextSpawnAt - Date.now()))}`);
   for (const card of refs.monsters) {
     const btn = card.querySelector('[data-k="fight"]');
-    const label = state.battle ? "In a fight" : "Fight";
+    const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
     if (btn.textContent !== label) btn.textContent = label;
     btn.disabled = !canFight();
   }
@@ -1862,8 +1939,9 @@ function buildBattleScreen() {
       </div>
       <div class="bt-arena">
         <div class="bt-info foe" data-k="foeInfo"></div>
-        <div class="bt-spot foe${m.boss ? " boss" : ""}">
-          <div class="bt-sprite" data-k="foeSprite">${m.icon}</div>
+        <div class="bt-spot foe${m.boss ? " boss" : ""} mon-bg-${m.element}">
+          ${m.boss ? `<div class="boss-aura"></div><div class="boss-sparks">${bossParticles(12)}</div>` : ""}
+          <div class="bt-sprite" data-k="foeSprite">${monsterArtHTML(m)}</div>
           <div class="bt-pad"></div>
           <div class="bt-fx" data-k="foeFx"></div>
         </div>
@@ -1946,6 +2024,7 @@ function renderBattleMenu() {
         <button class="primary big" data-k="close">Back to Adventure</button>
       </div>`;
     battlePart("close").onclick = closeBattle;
+    if (b.result === "win" && m.boss) showBossVictory();
     return;
   }
 
@@ -1975,6 +2054,48 @@ function renderBattleMenu() {
     <div class="actions">${html}
       <button class="danger" data-a="flee" ${myTurn ? "" : "disabled"}>🏃 Run away</button></div>`;
   menu.querySelectorAll("[data-a]").forEach(btn => { btn.onclick = () => onHeroAction(btn.dataset.a); });
+}
+
+// After beating a boss: a big victory window with sparks, confetti and the rewards.
+function showBossVictory() {
+  const b = state.battle;
+  if (!b || battleScreen().querySelector(".vic-overlay")) return;
+  const m = b.monster;
+  const info = BOSS_ART[monsterArtKey(m)] || {};
+  const e = elementById[m.element];
+  const colors = ["#ffd34d", "#ff8a3a", "#7dffc4", "#7ac8ff", "#ff6bd0", "#ffffff"];
+  const confetti = Array.from({ length: 36 }, (_, i) =>
+    `<i style="--x:${(i * 29) % 100}%;--d:${((i * 0.37) % 2.4).toFixed(2)}s;--s:${(2.4 + (i % 5) * 0.45).toFixed(2)}s;--r:${(i * 47) % 360}deg;background:${colors[i % colors.length]}"></i>`).join("");
+  let unlock = "";
+  if (b.tierUp && b.tierUp > m.tier) {
+    const t = TIERS[b.tierUp - 1];
+    unlock = `<div class="vic-row new"><span>⚠️ Danger level ${b.tierUp}</span><span>${t.icon} ${t.name} opened!</span></div>`;
+  } else if (peakCleared() && m.tier === TIERS.length) {
+    unlock = `<div class="vic-row new"><span>👑 Every boss beaten</span><span>Reincarnate for Souls!</span></div>`;
+  }
+  const overlay = el(`
+    <div class="vic-overlay mon-bg-${m.element}" role="dialog" aria-label="Boss defeated">
+      <div class="vic-rays"></div>
+      <div class="vic-confetti">${confetti}</div>
+      <div class="vic-card">
+        <div class="vic-kicker">Congratulations!</div>
+        <div class="vic-title">Victory!</div>
+        <div class="vic-stage">
+          <div class="vic-burst"></div>
+          ${monsterArtHTML(m, "vic-boss")}
+          <div class="vic-stamp">Defeated</div>
+        </div>
+        <div class="vic-msg">You defeated <b>${m.name}</b>${info.title ? `, ${info.title.charAt(0).toLowerCase() + info.title.slice(1)}` : ""}!</div>
+        <div class="vic-rewards">
+          <div class="vic-row"><span>${e.icon} ${e.drop}</span><span class="num">+${m.reward.drops}</span></div>
+          <div class="vic-row"><span>🪙 Coins</span><span class="num">+${fmt(m.reward.coins)}</span></div>
+          ${unlock}
+        </div>
+        <button class="primary big wide" data-k="vicClose">Continue</button>
+      </div>
+    </div>`);
+  overlay.querySelector('[data-k="vicClose"]').onclick = closeBattle;
+  battleScreen().appendChild(overlay);
 }
 
 // Floating numbers and shakes for what just happened. Shown one after another.

@@ -180,7 +180,8 @@ function gearArtSVG(typeId, oreId) {
 
 // Turn a text map into an SVG. colors maps each letter to a color; a dark outline is added around
 // the picture and it is centered top to bottom. Also used by the skill pictures (skill-art.js).
-function pixelArtSVG(map, pal, className) {
+// classes (optional) gives some letters a CSS class, e.g. { E: "m-eye" } so glowing eyes can pulse.
+function pixelArtSVG(map, pal, className, classes = null) {
   // One pixel of room on every side for the outline.
   const H = map.length + 2, W = map[0].length + 2;
   const at = (r, c) => (r >= 1 && r <= map.length && c >= 1 && c <= map[0].length) ? map[r - 1][c - 1] : ".";
@@ -201,7 +202,8 @@ function pixelArtSVG(map, pal, className) {
       const ch = grid[r][c];
       let end = c + 1;
       while (end < W && grid[r][end] === ch) end++;
-      if (ch !== "." && colors[ch]) rects += `<rect x="${c}" y="${r}" width="${end - c}" height="1" fill="${colors[ch]}"/>`;
+      const cls = classes && classes[ch] ? ` class="${classes[ch]}"` : "";
+      if (ch !== "." && colors[ch]) rects += `<rect x="${c}" y="${r}" width="${end - c}" height="1" fill="${colors[ch]}"${cls}/>`;
       c = end;
     }
   }
