@@ -34,7 +34,7 @@ function oreIcon(o) {
   return typeof oreArtSVG === "function" ? oreArtSVG(o.id) || o.icon : o.icon;
 }
 
-// The hero's stats. "power" (skill power) makes your skills hit harder.
+// The hero's stats.
 // Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes.
 
 const STATS = [
@@ -42,10 +42,9 @@ const STATS = [
   { id: "attack",  name: "Attack",      icon: "⚔️" },
   { id: "defense", name: "Defense",     icon: "🛡️" },
   { id: "agility", name: "Agility",     icon: "💨" },
-  { id: "power",   name: "Skill power", icon: "✨" },
   { id: "luck",    name: "Luck",        icon: "🍀" },
 ];
-const HERO_BASE_STATS = { hp: 100, attack: 2, defense: 0, agility: 5, power: 0, luck: 0 };
+const HERO_BASE_STATS = { hp: 100, attack: 2, defense: 0, agility: 5, luck: 0 };
 
 // Where gear can be worn. One item per slot.
 const SLOTS = [
@@ -184,10 +183,10 @@ const SKILL_LEVEL_COST_START = 0.6; // level 1 -> 2 costs 60% of the buy price
 const SKILL_LEVEL_COST_GROWTH = 1.7;
 
 // What a skill can do (any mix):
-//   power:    damage = (attack + skill power) x power. Skills never miss and can crit.
+//   power:    damage = attack x power. Skills never miss and can crit.
 //   hits:     how many times it strikes (default 1)
 //   status:   a status effect it can cause (see STATUS), with `chance` (0-1) per hit
-//   heal:     heals this share of your max HP (also grows with skill power)
+//   heal:     heals this share of your max HP
 //   cleanse:  also cures your own status effects
 //   guard:    you guard this turn as well
 //   interrupt: cancels a heavy attack the monster is winding up
@@ -205,7 +204,7 @@ const SKILLS = [
   { id: "glacial_prison",element: "ice",       grade: 3, name: "Glacial Prison",   power: 3.5, status: "frozen", chance: 1, desc: "Freeze the foe solid. It loses its next turn." },
   // Wind: poison, speed and healing
   { id: "gust",          element: "wind",      grade: 1, name: "Gust",             power: 1.3, interrupt: true, status: "poison", chance: 0.5, desc: "A toxic blast that breaks a heavy attack wind-up. 50% chance to poison." },
-  { id: "healing_breeze",element: "wind",      grade: 2, name: "Healing Breeze",   heal: 0.3, cleanse: true, desc: "Heal 30% of your max HP (more with skill power) and cure your status effects." },
+  { id: "healing_breeze",element: "wind",      grade: 2, name: "Healing Breeze",   heal: 0.3, cleanse: true, desc: "Heal 30% of your max HP and cure your status effects." },
   { id: "cyclone",       element: "wind",      grade: 3, name: "Cyclone",          power: 1.6, hits: 3, status: "poison", chance: 0.5, desc: "Three spinning slashes. Each can crit and has a 50% chance to add poison." },
   // Earth: toughness, stuns and weaken
   { id: "stone_fist",    element: "earth",     grade: 1, name: "Stone Fist",       power: 1.6, status: "stun", chance: 0.2, desc: "A heavy punch of rock. 20% chance to stun." },
@@ -1182,8 +1181,7 @@ function castSkill(sk, level, m) {
   battleLog(`You cast ${e.icon} ${sk.name}!`);
   if (sk.guard) b.guarding = true;
   if (sk.power) {
-    // Skill power adds to your attack for skills.
-    const attack = (b.hero.attack + b.hero.power) * sk.power * lvl;
+    const attack = b.hero.attack * sk.power * lvl;
     for (let i = 0; i < (sk.hits || 1) && b.monsterHp > 0; i++) {
       const hit = rollHit({
         attack, defense: m.stats.defense,
@@ -1199,7 +1197,7 @@ function castSkill(sk, level, m) {
     }
   }
   if (sk.heal) {
-    const amount = Math.round(b.hero.hp * sk.heal * lvl * (1 + b.hero.power / 100));
+    const amount = Math.round(b.hero.hp * sk.heal * lvl);
     const before = b.heroHp;
     b.heroHp = Math.min(b.hero.hp, b.heroHp + amount);
     battleLog(`You heal ${b.heroHp - before} HP.`);
@@ -2067,10 +2065,10 @@ function skillEffectText(sk, level) {
   const lvl = skillLevelMult(Math.max(1, level));
   const parts = [];
   if (sk.power) {
-    const per = Math.round((hero.attack + hero.power) * sk.power * lvl);
+    const per = Math.round(hero.attack * sk.power * lvl);
     parts.push(`${sk.hits ? `${sk.hits} × ` : ""}${fmt(per)} strength`);
   }
-  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl * (1 + hero.power / 100)))} HP`);
+  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl))} HP`);
   return parts.join(", ");
 }
 
