@@ -22,6 +22,8 @@ A small idle game you play in your browser. Mine ore, smith swords and armor, se
 10. **Element Mastery** (Upgrades panel): spend an element's essence to master it, up to level 25. Each level makes that element's skills 6% stronger and its status effect more likely (burn and poison also hurt more). Mastery is permanent: it stays when you reincarnate.
 11. **Run Boons** (Upgrades panel): spend ore plus essence to boost HP, attack, defense, agility or luck, up to level 10 each. Level N costs the ore of danger level N (level 1 copper ... level 10 voidsteel). Boons last until you reincarnate.
 
+**Info windows**: tap a skill or monster picture (or hover it on a computer) to see a small window with everything about it: description, damage and healing with your current stats, mana, status effect chance, level; or a monster's stats, weakness, moves, how hard you hit each other and its rewards. In battle, tap the little **i** on a skill button (or press and hold the button). A normal tap still casts the skill.
+
 Your progress saves automatically in your browser.
 
 ## Running it
@@ -36,6 +38,7 @@ Your progress saves automatically in your browser.
 - `game.js`: all the game rules. Ores, gear types, stats, elements, monsters, spawn timer, prices, upgrades, Souls and attributes are at the top, easy to tweak.
 - `dwarves.js`: the little animated dwarf miners in the Mine panel, one per ore, drawn in code as pixel art. Their looks, tools and mining moves are at the top, easy to tweak.
 - `ores-art.js`: the pixel-art ore pictures (Mine buttons, header, Forge tabs), drawn in code. Each ore has its own little drawing near the bottom of the file.
+- `info-pop.js`: the info windows for skills and monsters (what they show, and tap/hover/long-press handling).
 - `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
 - `gear-art.js`: the pixel-art sword and armor pictures, colored in each ore's color, drawn in code from little text maps.
 - `skill-art.js`: the pixel-art pictures for the 15 skills, colored per element, drawn the same way.
