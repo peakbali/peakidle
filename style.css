@@ -1739,3 +1739,30 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   .react-float { min-width: 120px; min-height: 60px; font-size: 20px; }
   .bt-react-banner .bt-prompt-state { font-size: 24px; }
 }
+
+/* ---------- Play as an app (PWA) ---------- */
+.install-box {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 2px solid var(--line);
+}
+.install-box h3 { margin: 0; font-size: 15px; }
+.install-box b { color: var(--text); }
+/* Shown when a new version arrives while the game is open */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 14px;
+  background: var(--stone);
+  color: var(--text);
+  box-shadow: var(--frame);
+  font-size: 14px;
+}

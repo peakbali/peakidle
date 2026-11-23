@@ -4,8 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
+  <!-- Installable app (PWA): app name, icons and colors for the home screen -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1a1411">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Peak Idle">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=37">
+  <link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -28,6 +37,11 @@
         <div class="row"><span>Reincarnations</span><b class="num" data-k="lives">0</b></div>
         <div class="row"><span>Prices</span><b class="num">×<span data-k="priceMult">1.00</span></b></div>
         <p class="small">Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do. The game saves by itself every few seconds.</p>
+        <div id="install-box" class="install-box">
+          <h3>Play as an app</h3>
+          <p id="install-text" class="small"></p>
+          <button id="install-btn" class="primary" type="button" hidden>Install app</button>
+        </div>
         <button id="reset" class="danger" type="button">Reset game…</button>
         <div id="reset-confirm" class="confirm" hidden>
           <div class="name">Erase everything?</div>
@@ -139,5 +153,6 @@
   <script src="game.js?v=37"></script>
   <script src="info-pop.js?v=37"></script>
   <script src="menu.js?v=37"></script>
+  <script src="pwa.js?v=38"></script>
 </body>
 </html>
