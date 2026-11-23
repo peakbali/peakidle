@@ -282,9 +282,8 @@ const BATTLE = {
 
 // Dodge and parry: when a monster attacks, a prompt pops up. Tap in time to react.
 //   Dodge: avoid the whole hit. Parry: take only 30% damage and strike back (not against heavy attacks).
-//   Pressing before the prompt says NOW counts as too early.
+//   The prompt opens straight away at a random spot on the screen, so you have to find it fast.
 const REACTION = {
-  waitMin: 500, waitMax: 1100, // the monster winds up for this long (ms, random) before the window opens
   windowMin: 600,              // the window is 0.6 to 1 second: longer when you're quicker than the monster
   windowMax: 1000,
   heavyWindow: 0.85,           // heavy attacks give a shorter window
@@ -1726,7 +1725,7 @@ function showPromptBanner(text) {
   prompt.innerHTML = `<div class="bt-prompt-card"><div class="bt-prompt-title">${text}</div></div>`;
 }
 
-// The dodge/parry prompt. It opens after a short random wind-up, then stays open for reactionWindow() ms.
+// The dodge/parry prompt. It opens right away at a random spot on the screen and stays open for reactionWindow() ms.
 function startReaction(p) {
   const b = state.battle;
   const m = b.monster;
@@ -1734,12 +1733,12 @@ function startReaction(p) {
   const windowMs = reactionWindow();
   const title = p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
   prompt.hidden = false;
-  prompt.className = "bt-prompt wait";
+  prompt.className = "bt-prompt now";
   prompt.innerHTML = `
     <div class="bt-prompt-card">
       <div class="bt-prompt-title">${title}</div>
       <div class="bt-timer"><div class="bt-timer-fill" data-k="timerFill"></div></div>
-      <div class="bt-prompt-state" data-k="promptState">Get ready…</div>
+      <div class="bt-prompt-state" data-k="promptState">NOW!</div>
       <div class="bt-react">
         <button type="button" class="react-btn" data-r="dodge">💨 Dodge <kbd>D</kbd></button>
         <button type="button" class="react-btn" data-r="parry" ${p.heavy ? `disabled title="Heavy attacks are too strong to parry"` : ""}>⚔️ Parry <kbd>P</kbd></button>
@@ -1755,20 +1754,25 @@ function startReaction(p) {
     btn.addEventListener("click", e => { if (e.detail === 0) pressReaction(btn.dataset.r); }); // keyboard Enter/Space
   });
 
-  const wait = REACTION.waitMin + Math.random() * (REACTION.waitMax - REACTION.waitMin);
-  later(wait, () => {
-    if (r.done) return;
-    r.open = true;
-    prompt.className = "bt-prompt now";
-    battlePart("promptState").textContent = "NOW!";
-    const fill = battlePart("timerFill");
-    fill.style.transition = "none";
-    fill.style.width = "100%";
-    void fill.offsetWidth;
-    fill.style.transition = `width ${windowMs}ms linear`;
-    fill.style.width = "0%";
-    later(windowMs, () => { if (!r.done) settleReaction(null, "Too slow!"); });
-  });
+  placePromptRandomly(prompt.querySelector(".bt-prompt-card"));
+  r.open = true;
+  const fill = battlePart("timerFill");
+  fill.style.transition = "none";
+  fill.style.width = "100%";
+  void fill.offsetWidth;
+  fill.style.transition = `width ${windowMs}ms linear`;
+  fill.style.width = "0%";
+  later(windowMs, () => { if (!r.done) settleReaction(null, "Too slow!"); });
+}
+
+// Put the prompt card somewhere random, always fully on screen with a small margin.
+function placePromptRandomly(card) {
+  const margin = 12;
+  const w = window.innerWidth, h = window.innerHeight;
+  const maxLeft = Math.max(margin, w - card.offsetWidth - margin);
+  const maxTop = Math.max(margin, h - card.offsetHeight - margin);
+  card.style.left = `${Math.round(margin + Math.random() * (maxLeft - margin))}px`;
+  card.style.top = `${Math.round(margin + Math.random() * (maxTop - margin))}px`;
 }
 
 function pressReaction(kind) {
