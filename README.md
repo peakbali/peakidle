@@ -39,6 +39,7 @@ Your progress saves automatically in your browser.
 - `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
 - `gear-art.js`: the pixel-art sword and armor pictures, colored in each ore's color, drawn in code from little text maps.
 - `skill-art.js`: the pixel-art pictures for the 15 skills, colored per element, drawn the same way.
+- `monster-art.js`: the pixel-art monsters (colored by their element) and the 10 bosses, with each boss's title, description and backstory. Also picks each monster's idle animation.
 - `icons.js`: the pixel-art icons for the menu, tab bar, panel titles and top bar (pickaxe, anvil, shield, swords, scroll, arrow, ghost, coin, gear, house), drawn in code from little text maps.
 - `fonts/`: the Jersey 15 pixel font used for titles and numbers (free, SIL Open Font License in `fonts/OFL.txt`).
 
