@@ -244,7 +244,11 @@ h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: u
 .actions .skill.ready { font-size: 13px; font-weight: 600; border-style: solid; border-color: currentColor; }
 .actions .skill.ready .small { font-weight: 400; }
 
-/* Merchant */
+/* Skills panel */
+.skill-card .buttons { align-items: center; }
+.have { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.have.enough { color: var(--good); }
+.have.short { color: var(--bad); }
 .skill-card.owned { border-color: #5a534b; background: rgba(255, 255, 255, 0.03); }
 .infuse { margin-bottom: 8px; }
 .infuse .tabs { margin-top: 4px; }
