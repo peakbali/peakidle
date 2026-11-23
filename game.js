@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 12;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 13;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 // A message for the player about what the last save upgrade changed (shown once when the game opens).
 let loadNote = "";
@@ -325,8 +325,7 @@ const TIERS = [
 const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", earth: "Rocky", lightning: "Charged" };
 
 const SPAWN = {
-  everyMs: 15 * 1000,     // a new monster appears every 15 seconds, even while the game is closed
-  max: 5,                 // at most 5 monsters wait at once; the timer pauses while 5 are waiting
+  max: 3,                 // 3 monsters wait at once. Beat (or catch) one and a new one takes its place right away.
   newRun: 3,              // a new game or reincarnation starts with 3 monsters already waiting
   lowerTierChance: 0.4,   // 40% of spawns are one tier below yours (from tier 2 up), for variety
 };
@@ -364,21 +363,36 @@ const BATTLE = {
   heavyEvery: 3,          // monsters wind up a heavy attack every 3rd turn
   heavyMultiplier: 1.8,
   heavyStunChance: 0.35,  // a heavy attack that lands (not guarded) can stun you
-  guardMultiplier: 0.4,   // guarding takes only 40% damage, and blocks status effects
+  guardMultiplier: 0.4,   // guarding (the Frost Armor skill) takes only 40% damage, and blocks status effects
   specialChance: 0.35,    // how often a monster uses its element move instead of a normal attack
   warCryChance: 0.2,      // bosses sometimes roar to weaken you
 };
 
-// Dodge and parry: when a monster attacks, a prompt pops up. Tap in time to react.
+// Dodge and parry: when a monster attacks, buttons may pop up. Tap one in time to react.
 //   Dodge: avoid the whole hit. Parry: take only 30% damage and strike back (not against heavy attacks).
-//   The prompt opens straight away at a random spot on the screen, so you have to find it fast.
+//   Not every attack gives you a chance: sometimes no button appears and the hit just lands.
+//   When they do appear, you get only Dodge, only Parry, or both, each at its own random spot.
 const REACTION = {
+  chance: 0.6,                 // 60% of normal attacks show buttons
+  heavyChance: 0.85,           // 85% of heavy attacks do (only Dodge, since heavy hits can't be parried)
   windowMin: 600,              // the window is 0.6 to 1 second: longer when you're quicker than the monster
   windowMax: 1000,
   heavyWindow: 0.85,           // heavy attacks give a shorter window
   bossWindow: 0.9,             // and so do bosses
   parryTaken: 0.3,             // a parried hit does 30% damage
   parryCounter: 0.6,           // your counterattack: 60% of a normal attack
+};
+
+// Catch: try to tame the monster instead of fighting on. Costs your turn.
+//   The chance goes up the more HP it has lost: 5% at full HP, 85% when it's almost down.
+//   Luck adds a bit, and a frozen or stunned monster is easier to catch. Bosses can't be caught.
+//   A caught monster goes into your Bestiary and gives the same rewards as beating it.
+const CATCH = {
+  base: 0.05,
+  fromHpLost: 0.8,       // + up to 80% as its HP drops
+  luckShare: 0.25,       // + a quarter of your luck (20 luck = +5%)
+  helpless: 0.1,         // + 10% while it's frozen or stunned
+  max: 0.95,
 };
 
 // Each monster has a special move of its own element, which can cause that element's status effect.
@@ -448,7 +462,6 @@ function freshState() {
     bossesBeaten: 0,      // bosses beaten this run; your tier (danger level) is this + 1
     tierWins: 0,          // wins against random monsters of your current tier (adds Souls)
     spawns: [],           // random monsters waiting to be fought: { uid, tier, creature, element }
-    nextSpawnAt: null,    // time (ms) the next monster appears, null while the screen is full
     nextUid: 1,
     skills: {},           // skill id -> level (0 = not bought yet)
     skillSlots: [null, null, null], // skill ids equipped for battle
@@ -462,6 +475,7 @@ function freshState() {
     reincarnations: 0,    // how many times you've reincarnated (prices go up each time)
     totalSouls: 0,        // all Souls ever earned
     profile: normalizeProfile(null), // your hero's name and look (see avatar.js), also kept on Reset
+    bestiary: {},         // monsters you've caught or met, by creature (art key): { seen, caught, el: { element: count } }
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
@@ -476,7 +490,6 @@ function freshState() {
   for (const sk of SKILLS) s.skills[sk.id] = 0;
   for (const slot of SLOTS) s.equipped[slot.id] = null;
   for (let i = 0; i < SPAWN.newRun; i++) addSpawn(s);
-  s.nextSpawnAt = Date.now() + SPAWN.everyMs;
   return s;
 }
 
@@ -546,6 +559,16 @@ function migrate(saved) {
     // v11 -> v12: rings and a ring slot. Nothing is reset: the ring slot starts empty
     // (freshState fills it in) and all your gear stays where it was.
     saved.version = 12;
+  }
+  if (saved.version < 13) {
+    // v12 -> v13: 3 monsters with no timer, Catch and the Bestiary.
+    // Monsters already waiting all stay, even if there are more than 3: no new ones come until
+    // you're below 3. The spawn timer is gone. Monsters on screen count as "seen" in the Bestiary.
+    delete saved.nextSpawnAt;
+    saved.bestiary = {};
+    for (const sp of saved.spawns || []) markSeen(saved, sp);
+    if (saved.battle && saved.battle.monster && !saved.battle.monster.boss) markSeen(saved, saved.battle.monster);
+    saved.version = 13;
   }
   // Later versions add their steps here.
   return saved;
@@ -652,10 +675,10 @@ function load() {
     });
     s.bossesBeaten = Math.min(TIERS.length, Math.max(0, s.bossesBeaten));
     if (Array.isArray(saved.spawns)) {
-      s.spawns = saved.spawns.filter(sp => sp && TIERS[sp.tier - 1] && TIERS[sp.tier - 1].creatures[sp.creature] && elementById[sp.element])
-        .slice(0, SPAWN.max);
-      s.nextSpawnAt = typeof saved.nextSpawnAt === "number" ? saved.nextSpawnAt : null;
+      // Keep every waiting monster, even past 3 (older saves could have 5).
+      s.spawns = saved.spawns.filter(sp => sp && TIERS[sp.tier - 1] && TIERS[sp.tier - 1].creatures[sp.creature] && elementById[sp.element]);
     }
+    s.bestiary = normalizeBestiary(saved.bestiary);
     s.profile = normalizeProfile(saved.profile);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
@@ -806,22 +829,82 @@ function addSpawn(s) {
   const tier = top > 1 && Math.random() < SPAWN.lowerTierChance ? top - 1 : top;
   const creature = Math.floor(Math.random() * TIERS[tier - 1].creatures.length);
   const element = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)].id;
-  s.spawns.push({ uid: s.nextUid++, tier, creature, element });
+  const sp = { uid: s.nextUid++, tier, creature, element };
+  s.spawns.push(sp);
+  markSeen(s, sp);
+  return sp;
 }
 
-// Add every monster that should have appeared by now (also covers time the game was closed).
-// The timer stops while the screen is full and starts again when a spot opens up.
-function updateSpawns(now = Date.now()) {
+// A monster left the screen (beaten or caught). A new one takes its spot right away,
+// unless an old save still has more than 3 waiting: then the spot just closes.
+function replaceSpawn(uid) {
+  const i = state.spawns.findIndex(x => x.uid === uid);
+  if (i < 0) return;
+  if (state.spawns.length > SPAWN.max) { state.spawns.splice(i, 1); return; }
+  state.spawns.splice(i, 1);
+  const sp = addSpawn(state);
+  state.spawns.pop();
+  state.spawns.splice(i, 0, sp);
+}
+
+// Keep 3 monsters waiting. A free spot is filled straight away (no timer).
+function updateSpawns() {
   let added = 0;
-  while (state.spawns.length < SPAWN.max) {
-    if (state.nextSpawnAt === null) state.nextSpawnAt = now + SPAWN.everyMs;
-    if (now < state.nextSpawnAt) break;
-    addSpawn(state);
-    added++;
-    state.nextSpawnAt += SPAWN.everyMs;
-  }
-  if (state.spawns.length >= SPAWN.max) state.nextSpawnAt = null;
+  while (state.spawns.length < SPAWN.max) { addSpawn(state); added++; }
   return added;
+}
+
+// ---------- Bestiary ----------
+// One entry per kind of creature (40 in all), by its art key, e.g. "rat" or "fire_ant".
+
+function creatureKey(name) { return name.toLowerCase().replace(/ /g, "_"); }
+
+// The art key of a waiting spawn ({ tier, creature }) or a monster (has .art or .name).
+function bestiaryKeyOf(x) {
+  if (x.art) return x.art;
+  const t = TIERS[(x.tier || 1) - 1];
+  const c = t && (typeof x.creature === "number" ? t.creatures[x.creature] : t.creatures.find(c => x.name && x.name.endsWith(c.name)));
+  return c ? creatureKey(c.name) : null;
+}
+
+function bestiaryEntry(s, key) {
+  if (!s.bestiary) s.bestiary = {};
+  if (!s.bestiary[key]) s.bestiary[key] = { seen: true, caught: 0, el: {} };
+  return s.bestiary[key];
+}
+
+function markSeen(s, x) {
+  const key = bestiaryKeyOf(x);
+  if (key) bestiaryEntry(s, key).seen = true;
+}
+
+function recordCatch(m) {
+  const e = bestiaryEntry(state, bestiaryKeyOf(m));
+  e.caught += 1;
+  e.el[m.element] = (e.el[m.element] || 0) + 1;
+  if (!e.first) e.first = Date.now();
+}
+
+function normalizeBestiary(saved) {
+  const out = {};
+  const keys = new Set(TIERS.flatMap(t => t.creatures.map(c => creatureKey(c.name))));
+  for (const [k, v] of Object.entries(saved || {})) {
+    if (!keys.has(k) || !v) continue;
+    const el = {};
+    for (const [id, n] of Object.entries(v.el || {})) if (elementById[id] && n > 0) el[id] = Math.floor(n);
+    out[k] = { seen: true, caught: Math.max(0, Math.floor(v.caught || 0)), el };
+    if (v.first) out[k].first = v.first;
+  }
+  return out;
+}
+
+// Chance (0-1) that Catch works right now.
+function catchChance(b = state.battle) {
+  if (!b || b.monster.boss) return 0;
+  const lost = 1 - b.monsterHp / b.monster.stats.hp;
+  let c = CATCH.base + CATCH.fromHpLost * lost + CATCH.luckShare * (b.hero.luck || 0) / 100;
+  if (hasEffect("monster", "frozen") || hasEffect("monster", "stun")) c += CATCH.helpless;
+  return Math.max(0, Math.min(CATCH.max, c));
 }
 
 function canFight() { return !state.battle; }
@@ -1007,7 +1090,7 @@ function startBattle(uid) {
     pending: null,     // the monster's chosen move while you get the chance to react
     guarding: false,
     charging: false,   // the monster is winding up a heavy attack
-    log: [`A wild ${m.name} appears!`, "When it attacks, tap Dodge or Parry the moment it says NOW!"],
+    log: [`A wild ${m.name} appears!`, "When it attacks, Dodge or Parry buttons may pop up. Tap them fast!"],
     result: null,      // "win", "lose" or "fled" once it's over
   };
   // Quicker monsters strike first.
@@ -1143,7 +1226,7 @@ function heroAttack(extra = 1, label = "You hit") {
   battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
 }
 
-// Your turn. action: "attack", "guard", "flee", "skill0".."skill2", or "wait" (only while frozen or stunned).
+// Your turn. action: "attack", "catch", "flee", "skill0".."skill2", or "wait" (only while frozen or stunned).
 // Returns true if the turn happened.
 function battleAction(action) {
   const b = state.battle;
@@ -1160,21 +1243,29 @@ function battleAction(action) {
     if (action !== "wait") return false;
     const id = skipsTurn("hero");
     battleLog(id === "frozen" ? "🧊 You're frozen solid and can't move!" : "💫 You're stunned and can't move!");
-  } else if (action === "attack" || action === "guard" || /^skill[0-9]$/.test(action)) {
+  } else if (action === "attack" || action === "catch" || /^skill[0-9]$/.test(action)) {
     let sk = null, slot = null;
     if (action.startsWith("skill")) {
       slot = (b.skills || [])[Number(action.slice(5))];
       sk = slot && skillById[slot.id];
       if (!sk || b.mana < skillGrade(sk).mana) return false;
     }
-    if (action !== "guard" && hasEffect("hero", "shock") && Math.random() < STATUS.shock.fail) {
+    if (action === "catch" && m.boss) return false; // bosses can't be caught
+    if (hasEffect("hero", "shock") && Math.random() < STATUS.shock.fail) {
       battleLog("⚡ You're shocked and your body won't move!");
       battleFx("hero", "⚡ Shocked", "status");
     } else if (action === "attack") {
       heroAttack();
-    } else if (action === "guard") {
-      b.guarding = true;
-      battleLog("You raise your guard. (Less damage and no status effects this turn.)");
+    } else if (action === "catch") {
+      const chance = catchChance(b);
+      if (Math.random() < chance) {
+        battleLog(`🪤 You throw your net... Gotcha! ${m.name} is caught!`);
+        battleFx("monster", "Caught!", "status");
+        endBattle("caught");
+        return true;
+      }
+      battleLog(`🪤 You throw your net... ${m.name} breaks free! (${Math.round(chance * 100)}% chance)`);
+      battleFx("monster", "Broke free", "miss");
     } else {
       b.mana -= skillGrade(sk).mana;
       castSkill(sk, slot.level, m);
@@ -1323,7 +1414,7 @@ function monsterResolve(reaction = null) {
     // Every few turns the monster winds up a heavy attack for its next turn.
     if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
       b.charging = true;
-      battleLog(`⚠️ ${m.name} is winding up a heavy attack! Guard, dodge or break it with a skill.`);
+      battleLog(`⚠️ ${m.name} is winding up a heavy attack! Dodge it or break it with a skill.`);
     }
   }
   b.pending = null;
@@ -1346,11 +1437,12 @@ function endBattle(result) {
   const m = b.monster;
   b.result = result;
   b.pending = null;
-  if (result === "win") {
+  if (result === "caught") recordCatch(m);
+  if (result === "win" || result === "caught") {
     state.drops[m.element] += m.reward.drops;
     earnCoins(m.reward.coins);
     const e = elementById[m.element];
-    battleLog(`You win! You get ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`);
+    battleLog(`${result === "caught" ? "It joins your Bestiary!" : "You win!"} You get ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`);
     if (m.boss) {
       // The milestone: move up a tier. Monsters already waiting stay as they are.
       if (m.tier === currentTier() && !peakCleared()) {
@@ -1364,10 +1456,8 @@ function endBattle(result) {
         }
       }
     } else {
-      const before = state.spawns.length;
-      state.spawns = state.spawns.filter(x => x.uid !== m.uid);
+      replaceSpawn(m.uid);
       if (m.tier === currentTier()) state.tierWins += 1;
-      if (before >= SPAWN.max && state.spawns.length < SPAWN.max) state.nextSpawnAt = Date.now() + SPAWN.everyMs;
     }
   } else if (result === "lose") {
     battleLog(`${m.name} knocks you out. You wake up back at camp, nothing lost.`);
@@ -1471,6 +1561,7 @@ function reincarnate() {
     reincarnations: state.reincarnations + 1,
     totalSmithed: state.totalSmithed,
     profile: state.profile,
+    bestiary: state.bestiary, // your collection stays
   };
   state = Object.assign(freshState(), keep);
   forgeOre = "copper";
@@ -1709,17 +1800,6 @@ function elementTag(elementId) {
   return `<span class="el el-${e.id}">${e.icon} ${e.name}</span>`;
 }
 
-// "15 seconds" or "5 minutes", from SPAWN.everyMs.
-function spawnEveryText() {
-  const s = SPAWN.everyMs / 1000;
-  return s < 60 ? `${s} seconds` : `${s / 60} minutes`;
-}
-
-function fmtTime(ms) {
-  const s = Math.ceil(ms / 1000);
-  const m = Math.floor(s / 60);
-  return `${m}:${String(s % 60).padStart(2, "0")}`;
-}
 
 // The reward for beating a monster, as one line of text.
 function rewardText(m) {
@@ -1851,11 +1931,7 @@ function buildAdventure() {
     </div>
   </div>`));
 
-  refs.spawnTimer = el(`<h3 class="spawn-head"><span>Monsters <span class="num" data-k="count"></span></span> <span class="num" data-k="timer"></span></h3>`);
-  box.appendChild(refs.spawnTimer);
-  if (state.spawns.length === 0) {
-    box.appendChild(el(`<div class="card locked small">No monsters around right now. A new one appears every ${spawnEveryText()}.</div>`));
-  }
+  box.appendChild(el(`<h3 class="spawn-head"><span>Monsters</span></h3>`));
   for (const sp of state.spawns) {
     const card = monsterCard(spawnMonster(sp));
     refs.monsters.push(card);
@@ -1875,16 +1951,136 @@ function buildAdventure() {
 function renderAdventure() {
   if (refs.adventureKey !== adventureKey()) buildAdventure();
   for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmtShort(state.drops[e.id]));
-  set(refs.spawnTimer, "count", `${state.spawns.length}/${SPAWN.max}`);
-  set(refs.spawnTimer, "timer", state.nextSpawnAt === null
-    ? "Full: timer paused"
-    : `Next in ${fmtTime(Math.max(0, state.nextSpawnAt - Date.now()))}`);
+  renderBestiaryButton();
   for (const card of refs.monsters) {
     const btn = card.querySelector('[data-k="fight"]');
     const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
     setIconText(btn, label);
     btn.disabled = !canFight();
   }
+}
+
+// ---------- Bestiary window ----------
+// Every kind of monster, grouped by danger level. Caught ones show in color, the rest as dark shapes.
+
+// All 40 creatures in order: { key, tier, idx, name }.
+function bestiaryList() {
+  return TIERS.flatMap((t, ti) => t.creatures.map((c, idx) => ({ key: creatureKey(c.name), tier: ti + 1, idx, name: c.name })));
+}
+
+function bestiaryCounts() {
+  const list = bestiaryList();
+  const caught = list.filter(c => (state.bestiary[c.key] || {}).caught > 0).length;
+  const total = list.reduce((n, c) => n + ((state.bestiary[c.key] || {}).caught || 0), 0);
+  return { caught, kinds: list.length, total };
+}
+
+function renderBestiaryButton() {
+  const btn = document.getElementById("bestiary-btn");
+  if (!btn) return;
+  const { caught, kinds } = bestiaryCounts();
+  setIconText(btn, `📖 Bestiary ${caught}/${kinds}`);
+}
+
+// The element you caught most of this creature in (its picture uses that color).
+function bestiaryElement(entry) {
+  const els = Object.entries((entry && entry.el) || {}).sort((a, b) => b[1] - a[1]);
+  return els.length ? els[0][0] : "earth";
+}
+
+// A creature as a monster, for its picture and info window.
+function bestiaryMonster(c, element) {
+  return spawnMonster({ uid: 0, tier: c.tier, creature: c.idx, element });
+}
+
+let bestiaryShown = "";
+function openBestiary() {
+  bestiaryShown = "";
+  document.getElementById("bestiary").hidden = false;
+  document.body.classList.add("in-editor");
+  renderBestiary();
+}
+function closeBestiary() {
+  const box = document.getElementById("bestiary");
+  box.hidden = true;
+  box.innerHTML = "";
+  document.body.classList.remove("in-editor");
+  if (typeof closeInfoPop === "function") closeInfoPop();
+}
+
+function renderBestiary() {
+  const box = document.getElementById("bestiary");
+  if (!box || box.hidden) return;
+  const key = JSON.stringify(state.bestiary);
+  if (key === bestiaryShown) return;
+  bestiaryShown = key;
+  const { caught, kinds, total } = bestiaryCounts();
+  const list = bestiaryList();
+  const sections = TIERS.map((t, ti) => {
+    const cards = list.filter(c => c.tier === ti + 1).map(c => {
+      const e = state.bestiary[c.key];
+      const got = e && e.caught > 0;
+      const seen = e && e.seen;
+      const m = bestiaryMonster(c, bestiaryElement(e));
+      const dots = ELEMENTS.map(el => `<i class="bs-dot${e && e.el[el.id] ? ` on el-${el.id}` : ""}" title="${el.name}${e && e.el[el.id] ? `: ${e.el[el.id]} caught` : ": not caught yet"}"></i>`).join("");
+      return `
+        <div class="bs-card${got ? " got" : " missing"}" data-info="best:${c.key}">
+          <div class="bs-pic${got ? ` mon-bg-${m.element}` : ""}">${monsterArtHTML(m)}</div>
+          <div class="bs-name">${got || seen ? c.name : "???"}</div>
+          <div class="bs-count small num">${got ? `×${fmt(e.caught)}` : seen ? "Seen" : "Not seen"}</div>
+          <div class="bs-dots">${dots}</div>
+        </div>`;
+    }).join("");
+    const here = ti + 1 <= currentTier();
+    return `<div class="bs-zone"><span class="tag">Lv ${ti + 1}</span> ${here ? t.name : "???"}</div><div class="bs-grid">${cards}</div>`;
+  }).join("");
+  box.innerHTML = emo(`
+    <div class="av-card bs-card-box" role="dialog" aria-modal="true" aria-label="Bestiary">
+      <div class="gp-head">
+        <h3>📖 Bestiary</h3>
+        <button type="button" class="gp-close" data-close aria-label="Close">✕</button>
+      </div>
+      <div class="bs-sum"><span><b class="num">${caught}</b> / ${kinds} kinds caught</span><span><b class="num">${fmt(total)}</b> caught in all</span></div>
+      <div class="small">Use 🪤 Catch in a fight to add a monster. Each dot is an element you've caught it in. Tap a monster to see more.</div>
+      ${sections}
+    </div>`);
+  box.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeBestiary));
+}
+
+// The info window for a Bestiary card ("best:<key>"). Uses the normal monster window once it's caught.
+function bestiaryInfoHTML(key) {
+  const c = bestiaryList().find(x => x.key === key);
+  if (!c) return "";
+  const e = state.bestiary[key];
+  const t = TIERS[c.tier - 1];
+  if (!e || !e.caught) {
+    return `
+      <div class="ip-head">
+        <div class="ip-pic ip-mon bs-shadow">${monsterArtHTML(bestiaryMonster(c, "earth"))}</div>
+        <div class="ip-title">
+          <div class="ip-name">${e && e.seen ? c.name : "???"}</div>
+          <div class="ip-tags"><span class="tag">Lv ${c.tier}</span></div>
+          <div class="ip-dim">${c.tier <= currentTier() ? `${t.icon} ${t.name}` : "A place you haven't reached yet"}</div>
+        </div>
+      </div>
+      <div class="ip-note">${e && e.seen ? "You've met it, but not caught it yet." : "You haven't met this monster yet."} Lower its HP, then use 🪤 Catch.</div>`;
+  }
+  const caughtIn = ELEMENTS.map(el => `${el.icon} ${el.name}: <b>${e.el[el.id] || 0}</b>`).join("<br>");
+  return `${monsterInfoHTML(bestiaryMonster(c, bestiaryElement(e)), false)}
+    <div class="ip-sub">🪤 Your catches: ${fmt(e.caught)}</div>
+    <div class="ip-note ip-list">${caughtIn}</div>`;
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", e => {
+    if (e.target.closest && e.target.closest("#bestiary-btn")) return openBestiary();
+    const box = document.getElementById("bestiary");
+    if (box && !box.hidden && e.target === box) closeBestiary(); // tap outside the card
+  });
+  document.addEventListener("keydown", e => {
+    const box = document.getElementById("bestiary");
+    if (e.key === "Escape" && box && !box.hidden) closeBestiary();
+  });
 }
 
 function hpBar(now, max) {
@@ -1993,7 +2189,7 @@ function renderBattle() {
   battlePart("foeInfo").innerHTML = emo(`
     <div class="row"><span class="name" data-info="foe">${m.name}<span class="info-i inline" aria-hidden="true">i</span>${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
     ${hpBar(b.monsterHp, m.stats.hp)}
-    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`);
+    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Dodge it, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`);
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
@@ -2001,7 +2197,7 @@ function renderBattle() {
     <div class="row"><span class="name">${avatarNameHTML(normalizeProfile(state.profile).name)}</span></div>
     ${hpBar(b.heroHp, b.hero.hp)}
     <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
-    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}</div>`);
+    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Ice shell: less damage and no status effects this turn">🛡️</span>` : ""}</div>`);
 
   const youSprite = battlePart("youSprite"), foeSprite = battlePart("foeSprite");
   youSprite.classList.toggle("guarding", b.guarding && !b.result);
@@ -2009,6 +2205,7 @@ function renderBattle() {
     for (const id of ["frozen", "stun", "burn", "poison", "shock"]) sprite.classList.toggle(`is-${id}`, hasEffect(side, id));
   }
   foeSprite.classList.toggle("fainted", b.result === "win");
+  foeSprite.classList.toggle("caught", b.result === "caught");
   youSprite.classList.toggle("fainted", b.result === "lose");
 
   const logBox = battlePart("log");
@@ -2024,12 +2221,14 @@ function renderBattleMenu() {
   const m = b.monster;
   const menu = battlePart("menu");
   if (b.result) {
-    const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
+    const titles = { win: "🏆 Victory!", caught: "🪤 Caught!", lose: "💫 Knocked out", fled: "🏃 You got away" };
     const e = elementById[m.element];
     menu.innerHTML = emo(`
       <div class="bt-result">
         <div class="result ${b.result}">${titles[b.result]}</div>
-        <div class="small">${b.result === "win"
+        <div class="small">${b.result === "caught"
+          ? `${m.name} joined your Bestiary. You got ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`
+          : b.result === "win"
           ? `You got ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`
           : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
         <button class="primary big" data-k="close">Back to Adventure</button>
@@ -2060,7 +2259,9 @@ function renderBattleMenu() {
     }).join("");
     html = `
       <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack</button>
-      <button data-a="guard" ${myTurn ? "" : "disabled"} title="Take 40% damage and no status effects this turn">🛡️ Guard</button>
+      ${m.boss
+        ? `<button class="catch" disabled title="Bosses are too strong to catch">🪤 Catch <span class="small">Boss</span></button>`
+        : `<button class="catch" data-a="catch" ${myTurn ? "" : "disabled"} title="Try to catch it for your Bestiary. Easier when its HP is low. Uses your turn.">🪤 Catch <span class="small num">${Math.round(catchChance(b) * 100)}%</span></button>`}
       ${skills}`;
   }
   menu.innerHTML = emo(`
@@ -2150,18 +2351,39 @@ function onHeroAction(action) {
   }
 }
 
-// The monster's turn: show what it's doing, give you a chance to dodge or parry, then let it land.
+// The monster's turn: show what it's doing, maybe give you a chance to dodge or parry, then let it land.
 function runMonsterTurn() {
   const b = state.battle;
   if (!b || b.result || b.phase !== "monster") { battleUi.busy = false; if (b) renderBattle(); return; }
   battleUi.busy = true;
   const p = monsterChooseMove();
   renderBattle();
-  if (p.kind === "attack") startReaction(p);
-  else {
+  if (p.kind === "attack") {
+    const kinds = reactionKinds(p);
+    if (kinds.length) startReaction(p, kinds);
+    else {
+      // No buttons this time: the attack just lands (your agility can still make it miss).
+      showPromptBanner(attackTitle(p));
+      restartAnim(battlePart("foeSprite"), "winding");
+      later(1000, () => finishMonsterTurn(null));
+    }
+  } else {
     showPromptBanner(p.text);
     later(1100, () => finishMonsterTurn(null));
   }
+}
+
+// Which reaction buttons pop up for this attack: none, only Dodge, only Parry, or both.
+function reactionKinds(p) {
+  if (Math.random() >= (p.heavy ? REACTION.heavyChance : REACTION.chance)) return [];
+  if (p.heavy) return ["dodge"]; // heavy attacks can't be parried
+  const r = Math.random();
+  return r < 1 / 3 ? ["dodge"] : r < 2 / 3 ? ["parry"] : ["dodge", "parry"];
+}
+
+function attackTitle(p) {
+  const m = state.battle.monster;
+  return p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
 }
 
 function showPromptBanner(text) {
@@ -2172,37 +2394,34 @@ function showPromptBanner(text) {
   prompt.innerHTML = emo(`<div class="bt-prompt-card"><div class="bt-prompt-title">${text}</div></div>`);
 }
 
-// The dodge/parry prompt. It opens right away at a random spot on the screen and stays open for reactionWindow() ms.
-function startReaction(p) {
-  const b = state.battle;
-  const m = b.monster;
+// The dodge/parry buttons. A banner at the top says what's coming and runs the timer; each button
+// pops up at its own random spot and stays for reactionWindow() ms.
+function startReaction(p, kinds) {
   const prompt = battlePart("prompt");
   const windowMs = reactionWindow();
   if (typeof closeInfoPop === "function") closeInfoPop(); // never cover the dodge prompt
-  const title = p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
+  const label = { dodge: "💨 Dodge <kbd>D</kbd>", parry: "⚔️ Parry <kbd>P</kbd>" };
   prompt.hidden = false;
   prompt.className = "bt-prompt now";
   prompt.innerHTML = emo(`
-    <div class="bt-prompt-card">
-      <div class="bt-prompt-title">${title}</div>
+    <div class="bt-prompt-card bt-react-banner">
+      <div class="bt-prompt-title">${attackTitle(p)}</div>
+      <div class="bt-prompt-state" data-k="promptState">${kinds.length > 1 ? "Dodge or parry!" : kinds[0] === "dodge" ? "Dodge!" : "Parry!"}</div>
       <div class="bt-timer"><div class="bt-timer-fill" data-k="timerFill"></div></div>
-      <div class="bt-prompt-state" data-k="promptState">NOW!</div>
-      <div class="bt-react">
-        <button type="button" class="react-btn" data-r="dodge">💨 Dodge <kbd>D</kbd></button>
-        <button type="button" class="react-btn" data-r="parry" ${p.heavy ? `disabled title="Heavy attacks are too strong to parry"` : ""}>⚔️ Parry <kbd>P</kbd></button>
-      </div>
       ${p.heavy ? `<div class="small">Too heavy to parry: dodge it!</div>` : ""}
-    </div>`);
+    </div>
+    ${kinds.map(k => `<button type="button" class="react-btn react-float react-${k}" data-r="${k}">${label[k]}</button>`).join("")}`);
   restartAnim(battlePart("foeSprite"), "winding");
 
-  const r = { open: false, done: false, p };
+  const r = { open: false, done: false, p, kinds };
   battleUi.reaction = r;
-  prompt.querySelectorAll("[data-r]").forEach(btn => {
+  const btns = [...prompt.querySelectorAll("[data-r]")];
+  btns.forEach(btn => {
     btn.addEventListener("pointerdown", e => { e.preventDefault(); pressReaction(btn.dataset.r); });
     btn.addEventListener("click", e => { if (e.detail === 0) pressReaction(btn.dataset.r); }); // keyboard Enter/Space
   });
 
-  placePromptRandomly(prompt.querySelector(".bt-prompt-card"));
+  placeReactButtons(btns, prompt.querySelector(".bt-react-banner"));
   r.open = true;
   const fill = battlePart("timerFill");
   fill.style.transition = "none";
@@ -2213,21 +2432,35 @@ function startReaction(p) {
   later(windowMs, () => { if (!r.done) settleReaction(null, "Too slow!"); });
 }
 
-// Put the prompt card somewhere random, always fully on screen with a small margin.
-function placePromptRandomly(card) {
-  const margin = 12;
+// Put each button somewhere random below the banner, fully on screen, never on top of each other.
+function placeReactButtons(btns, banner) {
+  const margin = 12, gap = 18;
   const w = window.innerWidth, h = window.innerHeight;
-  const maxLeft = Math.max(margin, w - card.offsetWidth - margin);
-  const maxTop = Math.max(margin, h - card.offsetHeight - margin);
-  card.style.left = `${Math.round(margin + Math.random() * (maxLeft - margin))}px`;
-  card.style.top = `${Math.round(margin + Math.random() * (maxTop - margin))}px`;
+  const top = Math.min(h / 2, banner.getBoundingClientRect().bottom + margin);
+  const placed = [];
+  for (const btn of btns) {
+    const bw = btn.offsetWidth, bh = btn.offsetHeight;
+    const maxLeft = Math.max(margin, w - bw - margin), maxTop = Math.max(top, h - bh - margin);
+    let x = margin, y = top;
+    for (let tries = 0; tries < 40; tries++) {
+      x = Math.round(margin + Math.random() * (maxLeft - margin));
+      y = Math.round(top + Math.random() * (maxTop - top));
+      const clash = placed.some(o => x < o.x + o.w + gap && o.x < x + bw + gap && y < o.y + o.h + gap && o.y < y + bh + gap);
+      if (!clash) break;
+    }
+    placed.push({ x, y, w: bw, h: bh });
+    btn.style.left = `${x}px`;
+    btn.style.top = `${y}px`;
+  }
 }
 
 function pressReaction(kind) {
   const r = battleUi.reaction;
-  if (!r || r.done) return;
+  if (!r || r.done || !r.kinds.includes(kind)) return;
   if (kind === "parry" && r.p.heavy) return;
   if (!r.open) return settleReaction("early", "Too early!");
+  const btn = battlePart("prompt").querySelector(`[data-r="${kind}"]`);
+  if (btn) btn.classList.add("picked");
   settleReaction(kind, kind === "dodge" ? "Dodge!" : "Parry!");
 }
 
@@ -2254,7 +2487,7 @@ function finishMonsterTurn(reaction) {
   playBattleFx();
 }
 
-// Keyboard: D to dodge, P to parry.
+// Keyboard: D to dodge, P to parry (only when that button is showing).
 if (typeof document !== "undefined") document.addEventListener("keydown", e => {
   if (!battleUi.reaction || e.repeat) return;
   const k = e.key.toLowerCase();
@@ -2741,6 +2974,7 @@ function render() {
   renderUpgrades();
 
   renderAdventure();
+  renderBestiary();
   renderMerchant();
   if (typeof refreshInfoPop === "function") refreshInfoPop();
 
@@ -2775,11 +3009,7 @@ function start() {
     if (gained.length) log(`Welcome back! Your miners dug up ${gained.join(", ")} ore.`);
   }
 
-  const spawned = updateSpawns();
-  if (spawned > 0) {
-    const before = document.getElementById("log").dataset.msg || "";
-    log(`${before} ${spawned} new monster${spawned > 1 ? "s" : ""} appeared while you were away.`.trim());
-  }
+  updateSpawns();
 
   buildUI();
   if (loadNote) log(loadNote);

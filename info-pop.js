@@ -128,7 +128,7 @@ function monsterInfoHTML(m, live) {
   const moves = [
     `⚔️ <b>Attack</b>: a normal hit`,
     `${e.icon} <b>${move.name}</b>: ${ipPct(move.power)} power, ${ipPct(move.chance)} chance to ${moveSt.icon} ${moveSt.name.toLowerCase()}`,
-    `💥 <b>Heavy attack</b> every ${BATTLE.heavyEvery}rd turn: ×${BATTLE.heavyMultiplier} damage, can stun. Guard or dodge it!`,
+    `💥 <b>Heavy attack</b> every ${BATTLE.heavyEvery}rd turn: ×${BATTLE.heavyMultiplier} damage, can stun. Dodge it!`,
   ];
   if (m.boss) moves.push(`📯 <b>War cry</b>: sometimes roars to 🥀 weaken you`);
 
@@ -137,6 +137,9 @@ function monsterInfoHTML(m, live) {
     ipRow("It hits you", `about <b>${fmt(itsHit)}</b> <span class="ip-dim">(you have ${fmt(live ? b.heroHp : hero.hp)} HP)</span>`),
     ipRow("Dodge chance", `you ${ipPct(dodgeChance(hero.agility, m.stats.agility))} · it ${ipPct(dodgeChance(m.stats.agility, hero.agility))}`),
   ];
+  if (!m.boss) fight.push(ipRow("Catch chance", live
+    ? `<b>${ipPct(catchChance(b))}</b> <span class="ip-dim">(higher as its HP drops)</span>`
+    : `${ipPct(CATCH.base)} at full HP, up to ${ipPct(CATCH.base + CATCH.fromHpLost)}`));
 
   const next = m.boss ? TIERS[m.tier] : null;
   const reward = `${m.reward.drops} ${e.icon} ${e.drop}<br>${fmt(m.reward.coins)} 🪙 coins${next ? `<br>Opens ${next.icon} ${next.name}` : ""}`;
@@ -170,6 +173,7 @@ function infoHTML(key, level) {
     return sp ? monsterInfoHTML(spawnMonster(sp), false) : "";
   }
   if (kind === "boss") return TIERS[Number(id) - 1] ? monsterInfoHTML(bossMonster(Number(id)), false) : "";
+  if (kind === "best") return bestiaryInfoHTML(id);
   if (kind === "foe") return state.battle ? monsterInfoHTML(state.battle.monster, !!ipBattle()) : "";
   return "";
 }
