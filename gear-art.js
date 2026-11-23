@@ -1,9 +1,9 @@
 // ---------- Pixel-art gear pictures ----------
-// The sword and the 5 armor pieces, drawn on a 16x16 pixel grid and colored with their ore's color,
+// The sword, the 5 armor pieces and the ring, drawn on a 16x16 pixel grid and colored with their ore's color,
 // so copper gear looks orange, mithril gear blue, voidsteel gear purple, and so on.
 // Each picture is a little text map: one letter = one pixel, "." = empty.
 //   a b c d e = the ore's metal, from darkest to brightest (c is the ore's own color)
-//   g         = the ore's gem (sword pommel and guard, helmet crest, chestplate, shield)
+//   g         = the ore's gem (sword pommel and guard, helmet crest, chestplate, shield, ring stone)
 //   L l       = dark and light leather (sword grip, glove cuff, boot sole)
 //   k         = near-black (helmet eye slits)
 // A dark outline is added around every picture automatically, like the other pixel icons.
@@ -115,6 +115,24 @@ const GEAR_ART = {
     ".....bcbbcb.....",
     "......bbbb......",
     ".......bb.......",
+    "................",
+    "................",
+  ],
+  ring: [
+    "................",
+    "................",
+    "......bggb......",
+    ".....bgggeb.....",
+    "......bggb......",
+    ".....bdccdb.....",
+    "....bdc..cdb....",
+    "...bdc....cbb...",
+    "...bc......cb...",
+    "...bc......cb...",
+    "...bc......ab...",
+    "...bdc....cab...",
+    "....bdc..cab....",
+    ".....bbaaab.....",
     "................",
     "................",
   ],

@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 11;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 12;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 // A message for the player about what the last save upgrade changed (shown once when the game opens).
 let loadNote = "";
@@ -35,7 +35,8 @@ function oreIcon(o) {
 }
 
 // The hero's stats.
-// Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes.
+// Luck is your critical hit chance in % (a crit does double damage). It comes from rings, Soul attributes
+// and the Storm Charm boon, all added together. Above 100% luck every hit is a crit.
 
 const STATS = [
   { id: "hp",      name: "HP",          icon: "❤️" },
@@ -54,6 +55,7 @@ const SLOTS = [
   { id: "gloves",     name: "Gloves" },
   { id: "boots",      name: "Boots" },
   { id: "shield",     name: "Shield" },
+  { id: "ring",       name: "Ring" },
 ];
 
 // Every gear type can be smithed from every ore.
@@ -68,6 +70,9 @@ const GEAR_TYPES = [
   { id: "gloves",     name: "Gloves",     slot: "gloves",     icon: "🧤", cost: 10, stats: { defense: 1, attack: 1, agility: 2 } },
   { id: "boots",      name: "Boots",      slot: "boots",      icon: "🥾", cost: 12, stats: { defense: 1, agility: 3 } },
   { id: "shield",     name: "Shield",     slot: "shield",     icon: "🛡️", cost: 20, stats: { defense: 4, hp: 20 } },
+  // Rings: the gear that gives luck (critical hit chance). Luck doesn't use statMult (that would pass
+  // 100% at once), it follows its own list instead: copper 2%, iron 3% ... voidsteel 20%.
+  { id: "ring",       name: "Ring",       slot: "ring",       icon: "💍", cost: 8,  stats: {}, luckByOre: [2, 3, 4, 5, 6, 8, 10, 12, 15, 20] },
 ];
 
 // All recipes, built from every ore x every gear type (e.g. "iron_bow").
@@ -78,6 +83,7 @@ for (const ore of ORES) {
     const cost = Math.round(type.cost * ore.costMult);
     const stats = {};
     for (const [k, v] of Object.entries(type.stats)) stats[k] = Math.round(v * ore.statMult);
+    if (type.luckByOre) stats.luck = type.luckByOre[ORES.indexOf(ore)];
     RECIPES.push({
       id: `${ore.id}_${type.id}`,
       name: `${ore.name} ${type.name}`,
@@ -532,6 +538,11 @@ function migrate(saved) {
     saved.version = 10;
   }
   if (saved.version < 11) migrateToSwordsOnly(saved);
+  if (saved.version < 12) {
+    // v11 -> v12: rings and a ring slot. Nothing is reset: the ring slot starts empty
+    // (freshState fills it in) and all your gear stays where it was.
+    saved.version = 12;
+  }
   // Later versions add their steps here.
   return saved;
 }
@@ -754,7 +765,7 @@ function canBuyBoon(id) {
 }
 
 function statsText(stats) {
-  return STATS.filter(st => stats[st.id]).map(st => `+${stats[st.id]} ${st.name.toLowerCase()}`).join(", ");
+  return STATS.filter(st => stats[st.id]).map(st => `+${stats[st.id]}${st.id === "luck" ? "%" : ""} ${st.name.toLowerCase()}`).join(", ");
 }
 
 function bagCount(r) { return state.items[r.id] || 0; }
