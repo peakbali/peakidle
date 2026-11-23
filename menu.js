@@ -11,7 +11,7 @@ const MENU_ITEMS = [
   { id: "hero",      icon: "🛡️", name: "Hero",      blurb: "Stats and equipment" },
   { id: "adventure", icon: "⚔️", name: "Adventure", blurb: "Fight monsters" },
   { id: "merchant",  icon: "📜", name: "Skills",    blurb: "Buy and equip skills" },
-  { id: "upgrades",  icon: "⬆️", name: "Upgrades",  blurb: "Pickaxe, anvil, mines" },
+  { id: "upgrades",  icon: "⬆️", name: "Upgrades",  blurb: "Tools, mastery, boons" },
   { id: "souls",     icon: "👻", name: "Souls",     blurb: "Reincarnate, attributes" },
 ];
 

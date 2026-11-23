@@ -1022,3 +1022,9 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
   0% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Upgrades panel: Element Mastery and Run Boons */
+.up-note { margin: 2px 0 8px; }
+.up-card .stats-line { margin: 0; font-weight: 600; }
+.boon-price .enough { color: var(--good); }
+.boon-price .short { color: var(--bad); }

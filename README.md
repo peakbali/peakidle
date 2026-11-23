@@ -21,6 +21,8 @@ A small idle game you play in your browser. Mine ore, smith weapons and armor, s
 8. **Spend coins** on miners (they dig for you, even while the game is closed, up to 8 hours), a better pickaxe (more ore per click), a master anvil (gear sells for more), and new mines: iron, gold, mithril, adamant, obsidian, moonsilver, sunstone, starmetal and voidsteel (10 ores in all). Each new mine costs a lot more than the last, and its gear is much stronger.
 9. **Reincarnate** (Souls panel) whenever you like to start a new run and earn 👻 **Souls**. You get more Souls the higher your danger level got in Adventure and the more coins you earned that run, and you see how many before you confirm. Reincarnating resets coins, ore, miners, mines, upgrades, gear, essences and danger level (back to 1), but you **keep your learned skills, Souls and attributes**. Each reincarnation also makes miners, mines and upgrades 10% pricier (skill prices never go up).
 10. **Attributes**: spend Souls on HP, Attack, Defense, Agility and Luck (0 to 99 points each). Each point gives a flat bonus that adds to your gear, forever. Every point costs more Souls than the last. Luck is your critical hit chance in %.
+11. **Element Mastery** (Upgrades panel): spend an element's essence to master it, up to level 25. Each level makes that element's skills and weapon hits 6% stronger and its status effect more likely (burn and poison also hurt more). Mastery is permanent: it stays when you reincarnate.
+12. **Run Boons** (Upgrades panel): spend ore plus essence to boost HP, attack, defense, agility or luck, up to level 10 each. Level N costs the ore of danger level N (level 1 copper ... level 10 voidsteel). Boons last until you reincarnate.
 
 Your progress saves automatically in your browser.
 
