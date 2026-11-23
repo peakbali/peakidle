@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 7;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 8;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -18,6 +18,14 @@ const ORES = [
   { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 200,   unlockCost: 400,    statMult: 2.2, costMult: 1.5, gearValue: 6,    infuseCost: 8 },
   { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 1500,  unlockCost: 8000,   statMult: 4.5, costMult: 2,   gearValue: 36,   infuseCost: 20 },
   { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 10000, unlockCost: 150000, statMult: 9,   costMult: 2.5, gearValue: 270,  infuseCost: 50 },
+  // Deeper ores. Each mine costs about 9x the last and its gear is about 2.4x stronger, so every new
+  // ore takes clearly longer to reach (roughly 2 days of mining for Voidsteel on a first run).
+  { id: "adamant",    name: "Adamant",    icon: "🟩", perSecPerMiner: 0.06,  minerCost: 70000,     unlockCost: 2e6,    statMult: 21,   costMult: 3,   gearValue: 1900,  infuseCost: 120 },
+  { id: "obsidian",   name: "Obsidian",   icon: "🟣", perSecPerMiner: 0.04,  minerCost: 450000,    unlockCost: 18e6,   statMult: 52,   costMult: 3.5, gearValue: 13500, infuseCost: 300 },
+  { id: "moonsilver", name: "Moonsilver", icon: "🌙", perSecPerMiner: 0.03,  minerCost: 3e6,       unlockCost: 160e6,  statMult: 128,  costMult: 4,   gearValue: 95000, infuseCost: 750 },
+  { id: "sunstone",   name: "Sunstone",   icon: "🌞", perSecPerMiner: 0.02,  minerCost: 20e6,      unlockCost: 1.4e9,  statMult: 315,  costMult: 4.5, gearValue: 670e3, infuseCost: 1800 },
+  { id: "starmetal",  name: "Starmetal",  icon: "🌟", perSecPerMiner: 0.015, minerCost: 130e6,     unlockCost: 12e9,   statMult: 780,  costMult: 5,   gearValue: 4.7e6, infuseCost: 4500 },
+  { id: "voidsteel",  name: "Voidsteel",  icon: "🌌", perSecPerMiner: 0.01,  minerCost: 900e6,     unlockCost: 100e9,  statMult: 1900, costMult: 5.5, gearValue: 33e6,  infuseCost: 11000 },
 ];
 
 // The hero's stats. "power" (skill power) makes your skills hit harder.
@@ -223,6 +231,42 @@ const STATUS = {
 const ELEMENT_STATUS = { fire: "burn", ice: "frozen", wind: "poison", earth: "stun", lightning: "shock" };
 const WEAPON_STATUS_CHANCE = 0.1;
 
+// ---------- Weapon skills ----------
+// Every weapon type has 2 skills of its own. They're free: you can use them whenever a weapon of that
+// type is equipped, next to your 3 element skills. They cost mana like element skills and use your
+// weapon's element (if it has one), so an elemental weapon can also cause its status effect.
+//   power:     damage = attack x power (Arcane Blast adds skill power too: usePower)
+//   hits, critBonus, status + chance, guard, interrupt: same as element skills
+//   pierce:    ignores this share of the monster's defense
+//   riposte:   if the monster attacks you this turn, you strike back with this much of a normal attack
+//   empower:   your next element skill this fight is this much stronger (0.75 = +75%)
+//   elementStatus: chance to cause your weapon element's status effect (default WEAPON_STATUS_CHANCE)
+const WEAPON_SKILLS = [
+  { id: "crescent_slash",  weapon: "sword", icon: "🗡️", name: "Crescent Slash",   mana: 1, power: 1.8,
+    desc: "A clean, sweeping cut that never misses." },
+  { id: "riposte_stance",  weapon: "sword", icon: "🤺", name: "Riposte Stance",   mana: 2, power: 0.7, guard: true, riposte: 1.3,
+    desc: "A quick cut, then guard. If the monster attacks this turn, you strike back hard." },
+  { id: "heavy_chop",      weapon: "axe",   icon: "💥", name: "Heavy Chop",       mana: 2, power: 2.6, status: "stun", chance: 0.4,
+    desc: "A crushing blow. 40% chance to stun." },
+  { id: "whirlwind",       weapon: "axe",   icon: "🌀", name: "Whirlwind",        mana: 3, power: 1.5, hits: 3,
+    desc: "Spin with your axe and hit three times." },
+  { id: "piercing_thrust", weapon: "spear", icon: "📍", name: "Piercing Thrust",  mana: 1, power: 1.6, pierce: 0.5,
+    desc: "A precise jab that ignores half the monster's defense." },
+  { id: "skewer_charge",   weapon: "spear", icon: "🐎", name: "Skewering Charge", mana: 2, power: 2.4, pierce: 0.5, interrupt: true,
+    desc: "Charge through: ignores half its defense and breaks a heavy attack wind-up." },
+  { id: "double_shot",     weapon: "bow",   icon: "🎯", name: "Double Shot",      mana: 1, power: 1.0, hits: 2, critBonus: 0.1,
+    desc: "Two quick arrows, each with +10% crit chance." },
+  { id: "eagle_eye",       weapon: "bow",   icon: "🦅", name: "Eagle Eye",        mana: 2, power: 2.4, critBonus: 0.5,
+    desc: "A careful, aimed shot with +50% crit chance." },
+  { id: "arcane_focus",    weapon: "staff", icon: "🔆", name: "Arcane Focus",     mana: 1, empower: 0.75,
+    desc: "Gather your power: your next element skill this fight is 75% stronger." },
+  { id: "arcane_blast",    weapon: "staff", icon: "🔮", name: "Arcane Blast",     mana: 2, power: 2.0, usePower: true, elementStatus: 0.35,
+    desc: "A blast of raw magic that also uses your skill power. With an elemental staff, 35% chance to cause its status effect." },
+];
+const weaponSkillById = Object.fromEntries(WEAPON_SKILLS.map(ws => [ws.id, ws]));
+// The weapon skills that come with a weapon type (sword, axe...), or [] for none.
+function weaponSkillsOf(typeId) { return WEAPON_SKILLS.filter(ws => ws.weapon === typeId); }
+
 // ---------- Monsters ----------
 
 // Monsters appear at random. Your danger level ("tier") decides how strong they are.
@@ -242,6 +286,25 @@ const TIERS = [
   { name: "Sky Peak", icon: "🏔️",
     creatures: [{ name: "Giant", icon: "🥶" }, { name: "Behemoth", icon: "🦏" }, { name: "Djinn", icon: "🧞" }, { name: "Titan", icon: "⛈️" }],
     boss: { id: "peak_dragon", name: "Elder Peak Dragon", icon: "🐲", element: "earth" } },
+  // Danger levels 5-10: you need gear from the newer ores to stand a chance here.
+  { name: "Crystal Caverns", icon: "💎",
+    creatures: [{ name: "Hedgehog", icon: "🦔" }, { name: "Snail", icon: "🐌" }, { name: "Scorpion", icon: "🦂" }, { name: "Wisp", icon: "🔮" }],
+    boss: { id: "thunder_kraken", name: "Thunder Kraken", icon: "🐙", element: "lightning" } },
+  { name: "Sunken Ruins", icon: "🏛️",
+    creatures: [{ name: "Crab", icon: "🦀" }, { name: "Ghoul", icon: "🧟" }, { name: "Shark", icon: "🦈" }, { name: "Squid", icon: "🦑" }],
+    boss: { id: "tempest_leviathan", name: "Tempest Leviathan", icon: "🐋", element: "wind" } },
+  { name: "Frostfang Tundra", icon: "🌨️",
+    creatures: [{ name: "Mammoth", icon: "🦣" }, { name: "Owl", icon: "🦉" }, { name: "Bear", icon: "🐻" }, { name: "Walrus", icon: "🦭" }],
+    boss: { id: "rime_sorceress", name: "Rime Sorceress", icon: "🧙", element: "ice" } },
+  { name: "Ember Wastes", icon: "🏜️",
+    creatures: [{ name: "Fire Ant", icon: "🐜" }, { name: "Raptor", icon: "🦖" }, { name: "Mantis", icon: "🦗" }, { name: "Boar", icon: "🐗" }],
+    boss: { id: "inferno_lord", name: "Inferno Lord", icon: "👹", element: "fire" } },
+  { name: "Shadow Abyss", icon: "🌑",
+    creatures: [{ name: "Wraith", icon: "👻" }, { name: "Shade", icon: "👤" }, { name: "Skeleton", icon: "💀" }, { name: "Vampire", icon: "🧛" }],
+    boss: { id: "mountain_colossus", name: "Mountain Colossus", icon: "⛰️", element: "earth" } },
+  { name: "Starfall Crown", icon: "🌌",
+    creatures: [{ name: "Comet", icon: "☄️" }, { name: "Star Spirit", icon: "🌠" }, { name: "Void Eye", icon: "👁️" }, { name: "Seraph", icon: "😇" }],
+    boss: { id: "starfall_sovereign", name: "Starfall Sovereign", icon: "👑", element: "lightning" } },
 ];
 // A random monster's name starts with a word for its element, e.g. "Blazing Rat" or "Frozen Bat".
 const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", earth: "Rocky", lightning: "Charged" };
@@ -426,6 +489,12 @@ function migrate(saved) {
     // v6 -> v7: full-screen battles with status effects. Nothing is reset; a fight in progress
     // is converted by normalizeBattle() when it loads.
     saved.version = 7;
+  }
+  if (saved.version < 8) {
+    // v7 -> v8: 6 new ores, danger levels 5-10 and weapon skills. Nothing is reset: the new mines
+    // start locked (freshState fills them in), and if you had beaten the Sky Peak dragon you are
+    // now at danger level 5 with the next boss waiting.
+    saved.version = 8;
   }
   // Later versions add their steps here.
   return saved;
@@ -939,12 +1008,16 @@ function battleAction(action) {
     if (action !== "wait") return false;
     const id = skipsTurn("hero");
     battleLog(id === "frozen" ? "🧊 You're frozen solid and can't move!" : "💫 You're stunned and can't move!");
-  } else if (action === "attack" || action === "guard" || /^skill[0-9]$/.test(action)) {
-    let sk = null, slot = null;
+  } else if (action === "attack" || action === "guard" || /^w?skill[0-9]$/.test(action)) {
+    let sk = null, slot = null, ws = null;
     if (action.startsWith("skill")) {
       slot = (b.skills || [])[Number(action.slice(5))];
       sk = slot && skillById[slot.id];
       if (!sk || b.mana < skillGrade(sk).mana) return false;
+    }
+    if (action.startsWith("wskill")) {
+      ws = battleWeaponSkills()[Number(action.slice(6))];
+      if (!ws || b.mana < ws.mana) return false;
     }
     if (action !== "guard" && hasEffect("hero", "shock") && Math.random() < STATUS.shock.fail) {
       battleLog("⚡ You're shocked and your body won't move!");
@@ -954,6 +1027,9 @@ function battleAction(action) {
     } else if (action === "guard") {
       b.guarding = true;
       battleLog("You raise your guard. (Less damage and no status effects this turn.)");
+    } else if (ws) {
+      b.mana -= ws.mana;
+      useWeaponSkill(ws, m);
     } else {
       b.mana -= skillGrade(sk).mana;
       castSkill(sk, slot.level, m);
@@ -976,8 +1052,11 @@ function battleAction(action) {
 function castSkill(sk, level, m) {
   const b = state.battle;
   const e = elementById[sk.element];
-  const lvl = skillLevelMult(level);
-  battleLog(`You cast ${e.icon} ${sk.name}!`);
+  // Arcane Focus (staff) makes this one skill stronger, then it's used up.
+  const focus = 1 + (b.empower || 0);
+  const lvl = skillLevelMult(level) * focus;
+  battleLog(`You cast ${e.icon} ${sk.name}!${focus > 1 ? " (Focused!)" : ""}`);
+  b.empower = 0;
   if (sk.guard) b.guarding = true;
   if (sk.power) {
     // Skill power adds to your attack for skills, so a staff makes skills much stronger.
@@ -1011,6 +1090,51 @@ function castSkill(sk, level, m) {
   if (b.monsterHp <= 0) return;
   if (sk.guard) battleLog("Ice forms around you. You are guarding this turn.");
   if (sk.interrupt && b.charging) {
+    b.charging = false;
+    battleLog(`${m.name}'s heavy attack is broken!`);
+  }
+}
+
+// The weapon skills you can use in this fight: they come with the weapon you brought.
+function battleWeaponSkills() {
+  const b = state.battle;
+  const r = b && b.hero.weapon && recipeById[b.hero.weapon];
+  return r ? weaponSkillsOf(r.type) : [];
+}
+
+// Use a weapon skill. Mana is already paid. Weapon skills never miss.
+function useWeaponSkill(ws, m) {
+  const b = state.battle;
+  const wEl = b.hero.element;
+  battleLog(`You use ${ws.icon} ${ws.name}!`);
+  if (ws.guard) b.guarding = true;
+  if (ws.riposte) b.riposte = ws.riposte;
+  if (ws.power) {
+    const attack = (b.hero.attack + (ws.usePower ? b.hero.power : 0)) * ws.power;
+    const defense = m.stats.defense * (1 - (ws.pierce || 0));
+    const status = ws.status || (wEl && ELEMENT_STATUS[wEl]);
+    const chance = ws.status ? ws.chance : wEl ? (ws.elementStatus || WEAPON_STATUS_CHANCE) : 0;
+    for (let i = 0; i < (ws.hits || 1) && b.monsterHp > 0; i++) {
+      const hit = rollHit({
+        attack, defense,
+        attackEl: wEl, targetEl: m.element,
+        critChance: b.hero.luck / 100 + (ws.critBonus || 0),
+        dodge: 0,
+        extra: damageMult("hero"),
+      });
+      b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
+      battleLog(`${ws.name} hits ${m.name} for ${hit.damage}.${hitText(hit)}`);
+      battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
+      if (status && b.monsterHp > 0 && Math.random() < chance) applyStatus("monster", status, hit.damage);
+    }
+  }
+  if (ws.empower) {
+    b.empower = Math.max(b.empower || 0, ws.empower);
+    battleLog(`🔆 Power gathers around you. Your next element skill is ${Math.round(ws.empower * 100)}% stronger.`);
+  }
+  if (b.monsterHp <= 0) return;
+  if (ws.guard) battleLog(ws.riposte ? "You take a riposte stance: guarding, ready to strike back." : "You are guarding this turn.");
+  if (ws.interrupt && b.charging) {
     b.charging = false;
     battleLog(`${m.name}'s heavy attack is broken!`);
   }
@@ -1100,6 +1224,8 @@ function monsterResolve(reaction = null) {
       }
       if (reaction === "parry" && b.heroHp > 0) heroAttack(REACTION.parryCounter, "You parry and counter");
     }
+    // Riposte Stance (sword): strike back after the monster's attack.
+    if (b.riposte && b.heroHp > 0 && b.monsterHp > 0) heroAttack(b.riposte, "🤺 You riposte and hit");
     // Every few turns the monster winds up a heavy attack for its next turn.
     if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
       b.charging = true;
@@ -1116,6 +1242,7 @@ function monsterResolve(reaction = null) {
   // New round.
   b.turn += 1;
   b.guarding = false;
+  b.riposte = 0;
   b.mana = Math.min(BATTLE.maxMana, b.mana + BATTLE.manaPerTurn);
   b.phase = "hero";
   save();
@@ -1136,7 +1263,7 @@ function endBattle(result) {
       if (m.tier === currentTier() && !peakCleared()) {
         state.bossesBeaten += 1;
         state.tierWins = 0;
-        if (peakCleared()) battleLog("You conquered the Sky Peak! Reincarnate in the Souls panel for a big Souls reward.");
+        if (peakCleared()) battleLog(`You conquered the ${TIERS[TIERS.length - 1].name}! Reincarnate in the Souls panel for a big Souls reward.`);
         else {
           const t = TIERS[currentTier() - 1];
           battleLog(`Danger level ${currentTier()}: ${t.icon} ${t.name}! Stronger monsters will appear, and a new boss awaits.`);
@@ -1240,7 +1367,7 @@ function reincarnate() {
 function fmt(n) {
   n = Math.floor(n);
   if (n < 1000) return String(n);
-  const units = ["K", "M", "B", "T"];
+  const units = ["K", "M", "B", "T", "Qa", "Qi", "Sx"];
   let i = -1;
   while (n >= 1000 && i < units.length - 1) { n /= 1000; i++; }
   return n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0) + units[i];
@@ -1306,6 +1433,7 @@ function buildForge() {
           <span class="small">In bag: <span class="num" data-k="owned"></span></span>
         </div>
         <div class="stats-line">${statsText(r.stats)} <span class="small">· ${r.note}</span></div>
+        ${isWeapon ? `<div class="small wskill-line">Weapon skills: ${weaponSkillsOf(r.type).map(ws => `${ws.icon} ${ws.name}`).join(" · ")}</div>` : ""}
         <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore${isWeapon && forgeElement ? ` + ${ore.infuseCost} ${elementById[forgeElement].icon} ${elementById[forgeElement].drop}` : ""} · sells for <span data-k="price"></span> 🪙</div>
         ${isWeapon ? `<div class="small" data-k="bagEls"></div>` : ""}
         <div class="buttons">
@@ -1376,7 +1504,7 @@ function buildHero() {
           <div class="small">${slot.name}</div>
           <div class="name" data-k="item"></div>
           <div class="small" data-k="itemStats"></div>
-          ${slot.id === "weapon" ? `<div class="small" data-k="element"></div>` : ""}
+          ${slot.id === "weapon" ? `<div class="small" data-k="element"></div><div class="small wskill-line" data-k="wskills"></div>` : ""}
         </div>
         <button data-k="remove">Unequip</button>
       </div>`);
@@ -1466,7 +1594,7 @@ function buildAdventure() {
   box.appendChild(el(`<h3>Boss</h3>`));
   if (peakCleared()) {
     const last = TIERS[TIERS.length - 1].boss;
-    box.appendChild(el(`<div class="card boss small">🏆 ${last.icon} ${last.name} is defeated. The Sky Peak is yours!</div>`));
+    box.appendChild(el(`<div class="card boss small">🏆 ${last.icon} ${last.name} is defeated. The ${TIERS[TIERS.length - 1].name} is yours!</div>`));
   } else {
     const card = monsterCard(bossMonster(currentTier()));
     refs.monsters.push(card);
@@ -1594,7 +1722,7 @@ function renderBattle() {
   battlePart("foeInfo").innerHTML = `
     <div class="row"><span class="name">${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
     ${hpBar(b.monsterHp, m.stats.hp)}
-    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`;
+    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust, Earthquake or Skewering Charge.">⚠️ Heavy</span>` : ""}</div>`;
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
@@ -1602,7 +1730,7 @@ function renderBattle() {
     <div class="row"><span class="name">You</span>${elementTag(b.hero.element)}</div>
     ${hpBar(b.heroHp, b.hero.hp)}
     <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
-    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}</div>`;
+    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}${b.riposte && !b.result ? `<span class="st st-guard" title="Riposte Stance: you strike back when the monster attacks">🤺</span>` : ""}${b.empower && !b.result ? `<span class="st st-focus" title="Arcane Focus: your next element skill is ${Math.round(b.empower * 100)}% stronger">🔆</span>` : ""}</div>`;
 
   const youSprite = battlePart("youSprite"), foeSprite = battlePart("foeSprite");
   youSprite.classList.toggle("guarding", b.guarding && !b.result);
@@ -1654,9 +1782,18 @@ function renderBattleMenu() {
       return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${!myTurn || b.mana < cost ? "disabled" : ""}
         title="${sk.desc}">${elementById[sk.element].icon} ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>`;
     }).join("");
+    const wskills = battleWeaponSkills();
+    const weaponBtns = [0, 1].map(i => {
+      const ws = wskills[i];
+      if (!ws) return `<button class="skill" disabled title="Equip a weapon to get its 2 weapon skills">No weapon skill</button>`;
+      const st = ws.status ? ` ${STATUS[ws.status].icon}` : "";
+      return `<button class="skill ready wskill" data-a="wskill${i}" ${!myTurn || b.mana < ws.mana ? "disabled" : ""}
+        title="${ws.desc}">${ws.icon} ${ws.name}${st} <span class="small">💧${ws.mana}</span></button>`;
+    }).join("");
     html = `
       <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack ${elementTag(b.hero.element)}</button>
       <button data-a="guard" ${myTurn ? "" : "disabled"} title="Take 40% damage and no status effects this turn">🛡️ Guard</button>
+      ${weaponBtns}
       ${skills}`;
   }
   menu.innerHTML = `
@@ -1863,6 +2000,18 @@ function buildMerchant() {
       box.appendChild(card);
     }
   }
+
+  // Weapon skills: nothing to buy, they come with the weapon you equip.
+  box.appendChild(el(`<h3>⚔️ Weapon skills</h3>`));
+  box.appendChild(el(`<div class="small hint">Free! Every weapon type has 2 skills you can use in battle while it's equipped, on top of your 3 skill slots. They cost mana and use your weapon's element.</div>`));
+  for (const type of GEAR_TYPES.filter(t => t.slot === "weapon")) {
+    const list = weaponSkillsOf(type.id).map(ws => `
+      <div class="wskill-row"><b>${ws.icon} ${ws.name}</b> <span class="small">💧 ${ws.mana} mana</span><div class="small">${ws.desc}</div></div>`).join("");
+    box.appendChild(el(`<div class="card skill-card wskill-card" data-weapon="${type.id}">
+        <div class="row"><span class="name">${type.icon} ${type.name}</span><span class="tag" data-k="using" hidden>Equipped</span></div>
+        ${list}
+      </div>`));
+  }
 }
 
 // What a skill does at a level, in numbers, using your current stats.
@@ -1879,6 +2028,12 @@ function skillEffectText(sk, level) {
 }
 
 function renderMerchant() {
+  const w = state.equipped.weapon && recipeById[state.equipped.weapon.id];
+  document.querySelectorAll(".wskill-card").forEach(card => {
+    const using = !!w && w.type === card.dataset.weapon;
+    card.querySelector('[data-k="using"]').hidden = !using;
+    card.classList.toggle("owned", using);
+  });
   state.skillSlots.forEach((id, i) => {
     const row = refs.skillSlots[i];
     const sk = id && skillById[id];
@@ -2170,7 +2325,10 @@ function render() {
     const item = state.equipped[slot.id];
     const r = item && recipeById[item.id];
     set(row, "item", r ? `${r.icon} ${r.name}` : "Empty");
-    if (slot.id === "weapon") set(row, "element", r ? `Element: ${item.element ? `${elementById[item.element].icon} ${elementById[item.element].name}` : "Neutral"}` : "");
+    if (slot.id === "weapon") {
+      set(row, "element", r ? `Element: ${item.element ? `${elementById[item.element].icon} ${elementById[item.element].name}` : "Neutral"}` : "");
+      set(row, "wskills", r ? `Weapon skills: ${weaponSkillsOf(r.type).map(ws => `${ws.icon} ${ws.name} (💧${ws.mana})`).join(", ")}` : "");
+    }
     set(row, "itemStats", r ? statsText(r.stats) : "Smith something in the Forge and press Equip.");
     row.classList.toggle("empty", !r);
     row.querySelector('[data-k="remove"]').hidden = !r;

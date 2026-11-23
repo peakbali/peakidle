@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
   <header>
@@ -39,7 +39,7 @@
     <!-- Hero: stats and the gear you're wearing -->
     <section class="panel" id="panel-hero" data-panel="hero">
       <h2>Hero</h2>
-      <p class="hint">Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility.</p>
+      <p class="hint">Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility. Each weapon type comes with 2 weapon skills for battle.</p>
       <div id="hero-stats" class="hero-stats"></div>
       <h3>Equipment</h3>
       <div id="hero-slots"></div>
@@ -57,7 +57,7 @@
     <!-- Skills: skills bought and levelled up with essences -->
     <section class="panel" id="panel-merchant" data-panel="merchant">
       <h2>Skills</h2>
-      <p class="hint">Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level). Skill power adds to your attack for skills.</p>
+      <p class="hint">Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level). Skill power adds to your attack for skills. Your weapon also gives you 2 free weapon skills (listed at the bottom).</p>
       <h3>Your skill slots</h3>
       <div id="skill-slots"></div>
       <div id="skills"></div>
@@ -91,7 +91,7 @@
   <!-- Battle screen: takes over the whole screen while you fight (filled in by game.js) -->
   <div id="battle" class="battle-screen" role="dialog" aria-modal="true" aria-label="Battle" hidden></div>
 
-  <script src="game.js?v=14"></script>
-  <script src="menu.js?v=14"></script>
+  <script src="game.js?v=15"></script>
+  <script src="menu.js?v=15"></script>
 </body>
 </html>
