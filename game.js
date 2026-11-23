@@ -14,7 +14,7 @@ const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 //   infuseCost: essences needed to give one weapon of this material an element while smithing it
 const ORES = [
 //   minerCost / unlockCost: starting coin prices (they also go up after every reincarnation, see REINCARNATION)
-  { id: "copper",  name: "Copper",  icon: "🟠", image: "images/copper.jpg", perSecPerMiner: 1,    minerCost: 20,    unlockCost: 0,      statMult: 1,   costMult: 1,   gearValue: 1.25, infuseCost: 3 },
+  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 20,    unlockCost: 0,      statMult: 1,   costMult: 1,   gearValue: 1.25, infuseCost: 3 },
   { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 200,   unlockCost: 400,    statMult: 2.2, costMult: 1.5, gearValue: 6,    infuseCost: 8 },
   { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 1500,  unlockCost: 8000,   statMult: 4.5, costMult: 2,   gearValue: 36,   infuseCost: 20 },
   { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 10000, unlockCost: 150000, statMult: 9,   costMult: 2.5, gearValue: 270,  infuseCost: 50 },
@@ -1278,7 +1278,7 @@ function buildForge() {
   tabs.innerHTML = "";
   for (const o of ORES) {
     if (!state.unlocked[o.id]) continue;
-    const b = el(`<button class="tab${o.id === forgeOre ? " active" : ""}">${oreIcon(o)} ${o.name}</button>`);
+    const b = el(`<button class="tab${o.id === forgeOre ? " active" : ""}">${o.icon} ${o.name}</button>`);
     b.onclick = () => { forgeOre = o.id; buildForge(); render(); };
     tabs.appendChild(b);
   }
@@ -2017,7 +2017,7 @@ function buildUI() {
       const card = el(`
         <div class="card">
           <div class="row">
-            <button class="ore-btn" title="Mine ${o.name}">${oreIcon(o, true)}</button>
+            <button class="ore-btn" title="Mine ${o.name}">${o.icon}</button>
             <div style="flex:1">
               <div class="name">${o.name} ore: <span class="num" data-k="amount"></span></div>
               <div class="small">Miners: <span data-k="miners"></span> · <span data-k="rate"></span>/sec · +<span data-k="click"></span> per click</div>
@@ -2035,7 +2035,7 @@ function buildUI() {
       const card = el(`
         <div class="card locked">
           <div class="row">
-            <span class="name">${oreIcon(o)} ${o.name} mine (locked)</span>
+            <span class="name">${o.icon} ${o.name} mine (locked)</span>
             <button data-k="unlock" class="primary">Open for <span data-k="unlockCost"></span> 🪙</button>
           </div>
         </div>`);
@@ -2083,17 +2083,11 @@ function set(root, key, text) {
   if (node && node.textContent !== text) node.textContent = text;
 }
 
-// An ore's icon as HTML: its picture (round) if it has one, otherwise its emoji.
-function oreIcon(o, big = false) {
-  if (!o.image) return o.icon;
-  return `<img class="ore-img${big ? " big" : ""}" src="${o.image}" alt="${o.name}">`;
-}
-
 // Header: how much of each opened ore you have, next to your coins.
 function renderOreBar() {
   const bar = document.getElementById("ore-bar");
   if (!bar.children.length) {
-    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${oreIcon(o)} <span class="num" data-k="n">0</span></span>`));
+    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${o.icon} <span class="num" data-k="n">0</span></span>`));
   }
   for (const o of ORES) {
     const chip = bar.querySelector(`[data-ore="${o.id}"]`);
