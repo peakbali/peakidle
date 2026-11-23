@@ -71,8 +71,9 @@ const GEAR_TYPES = [
   { id: "boots",      name: "Boots",      slot: "boots",      icon: "🥾", cost: 12, stats: { defense: 1, agility: 3 } },
   { id: "shield",     name: "Shield",     slot: "shield",     icon: "🛡️", cost: 20, stats: { defense: 4, hp: 20 } },
   // Rings: the gear that gives luck (critical hit chance). Luck doesn't use statMult (that would pass
-  // 100% at once), it follows its own list instead: copper 2%, iron 3% ... voidsteel 20%.
-  { id: "ring",       name: "Ring",       slot: "ring",       icon: "💍", cost: 8,  stats: {}, luckByOre: [2, 3, 4, 5, 6, 8, 10, 12, 15, 20] },
+  // 100% at once), it follows its own list instead: copper 5%, iron 10% ... voidsteel 50%.
+  // Ring stats are read from this list every time, so rings you already own get the new values too.
+  { id: "ring",       name: "Ring",       slot: "ring",       icon: "💍", cost: 8,  stats: {}, luckByOre: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50] },
 ];
 
 // All recipes, built from every ore x every gear type (e.g. "iron_bow").
@@ -176,11 +177,12 @@ function elementMultiplier(attackEl, targetEl) {
 
 // The Skills panel sells 15 skills: 3 grades for each element.
 // Grade 1/2/3 costs 1/2/3 mana in battle. Skills are bought and levelled up with essences of their element.
-//   cost: essences to buy (rises steeply by grade)
+//   cost:  essences to buy (rises steeply by grade)
+//   boost: multiplies the skill's damage and healing. High (3 mana) skills hit twice as hard.
 const SKILL_GRADES = [
-  { grade: 1, name: "Low",  mana: 1, cost: 8 },
-  { grade: 2, name: "Mid",  mana: 2, cost: 50 },
-  { grade: 3, name: "High", mana: 3, cost: 300 },
+  { grade: 1, name: "Low",  mana: 1, cost: 8,   boost: 1 },
+  { grade: 2, name: "Mid",  mana: 2, cost: 50,  boost: 1 },
+  { grade: 3, name: "High", mana: 3, cost: 300, boost: 2 },
 ];
 // Levelling: each level makes the skill 25% stronger (damage and healing).
 // The essence cost of the next level grows by x1.7 each time.
@@ -223,6 +225,7 @@ const SKILLS = [
 ];
 const skillById = Object.fromEntries(SKILLS.map(sk => [sk.id, sk]));
 function skillGrade(sk) { return SKILL_GRADES[sk.grade - 1]; }
+function skillBoost(sk) { return skillGrade(sk).boost || 1; }
 
 // ---------- Status effects ----------
 // Both you and monsters can get these. `turns` counts the turns of whoever has it:
@@ -1205,7 +1208,7 @@ function castSkill(sk, level, m) {
         attackEl: sk.element, targetEl: m.element,
         critChance: b.hero.luck / 100 + (sk.critBonus || 0),
         dodge: 0,
-        extra: damageMult("hero") * masteryDamage(sk.element),
+        extra: damageMult("hero") * masteryDamage(sk.element) * skillBoost(sk),
       });
       b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
       battleLog(`${sk.name} hits ${m.name} for ${hit.damage}.${hitText(hit)}`);
@@ -1214,7 +1217,7 @@ function castSkill(sk, level, m) {
     }
   }
   if (sk.heal) {
-    const amount = Math.round(b.hero.hp * sk.heal * lvl);
+    const amount = Math.round(b.hero.hp * sk.heal * lvl * skillBoost(sk));
     const before = b.heroHp;
     b.heroHp = Math.min(b.hero.hp, b.heroHp + amount);
     battleLog(`You heal ${b.heroHp - before} HP.`);
@@ -2307,10 +2310,10 @@ function skillEffectText(sk, level) {
   const lvl = skillLevelMult(Math.max(1, level));
   const parts = [];
   if (sk.power) {
-    const per = Math.round(hero.attack * sk.power * lvl);
+    const per = Math.round(hero.attack * sk.power * lvl * skillBoost(sk));
     parts.push(`${sk.hits ? `${sk.hits} × ` : ""}${fmt(per)} strength`);
   }
-  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl))} HP`);
+  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl * skillBoost(sk)))} HP`);
   return parts.join(", ");
 }
 
