@@ -9,7 +9,10 @@
 <body>
   <header>
     <h1>⛏️ Peak Idle</h1>
-    <div class="coins">🪙 <span id="coins">0</span> coins</div>
+    <div class="header-right">
+      <div id="souls-bar" class="souls-bar" title="Souls are earned by reincarnating. Prices go up a little with every reincarnation.">👻 <span data-k="souls">0</span> Souls <span class="small">· Reincarnations: <span data-k="lives">0</span> · Prices ×<span data-k="priceMult">1.00</span></span></div>
+      <div class="coins">🪙 <span id="coins">0</span> coins</div>
+    </div>
   </header>
 
   <main>
@@ -31,7 +34,7 @@
     <!-- Hero: stats and the gear you're wearing -->
     <section class="panel">
       <h2>Hero</h2>
-      <p class="hint">Your stats go up with the gear you wear. Heavy armor gives more defense, light armor more agility.</p>
+      <p class="hint">Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility.</p>
       <div id="hero-stats" class="hero-stats"></div>
       <h3>Equipment</h3>
       <div id="hero-slots"></div>
@@ -53,6 +56,16 @@
       <h3>Your skill slots</h3>
       <div id="skill-slots"></div>
       <div id="skills"></div>
+    </section>
+
+    <!-- Souls: reincarnate for Souls, spend them on permanent attributes -->
+    <section class="panel">
+      <h2>Souls</h2>
+      <p class="hint">Reincarnate to start a new run and earn 👻 Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again.</p>
+      <h3>Attributes</h3>
+      <div id="attributes"></div>
+      <h3>Reincarnation</h3>
+      <div id="reincarnate"></div>
     </section>
 
     <!-- Upgrades bought with coins -->

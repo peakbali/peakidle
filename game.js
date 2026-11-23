@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 4;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 5;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -13,14 +13,15 @@ const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 //   gearValue: coins per ore used when the gear is sold
 //   infuseCost: essences needed to give one weapon of this material an element while smithing it
 const ORES = [
-  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 15,   unlockCost: 0,     statMult: 1,   costMult: 1,   gearValue: 1.25, infuseCost: 3 },
-  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 120,  unlockCost: 100,   statMult: 2.2, costMult: 1.5, gearValue: 6,    infuseCost: 8 },
-  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 900,  unlockCost: 1500,  statMult: 4.5, costMult: 2,   gearValue: 36,   infuseCost: 20 },
-  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 6000, unlockCost: 20000, statMult: 9,   costMult: 2.5, gearValue: 270,  infuseCost: 50 },
+//   minerCost / unlockCost: starting coin prices (they also go up after every reincarnation, see REINCARNATION)
+  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 20,    unlockCost: 0,      statMult: 1,   costMult: 1,   gearValue: 1.25, infuseCost: 3 },
+  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 200,   unlockCost: 400,    statMult: 2.2, costMult: 1.5, gearValue: 6,    infuseCost: 8 },
+  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 1500,  unlockCost: 8000,   statMult: 4.5, costMult: 2,   gearValue: 36,   infuseCost: 20 },
+  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 10000, unlockCost: 150000, statMult: 9,   costMult: 2.5, gearValue: 270,  infuseCost: 50 },
 ];
 
 // The hero's stats. "power" (skill power) makes your skills hit harder.
-// Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes later.
+// Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes.
 const STATS = [
   { id: "hp",      name: "HP",          icon: "❤️" },
   { id: "attack",  name: "Attack",      icon: "⚔️" },
@@ -93,7 +94,33 @@ const OLD_ITEM_IDS = {
 const recipeById = Object.fromEntries(RECIPES.map(r => [r.id, r]));
 const slotById = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
-const MINER_COST_GROWTH = 1.15; // each extra miner costs 15% more
+// ---------- Prices (balance) ----------
+// All coin prices grow exponentially, so a first run gets slow and reincarnating is how you push further.
+const MINER_COST_GROWTH = 1.22;                 // each extra miner of an ore costs 22% more
+const PICKAXE = { start: 60,  growth: 3.5 };    // pickaxe level 1 -> 2 costs 60, then x3.5 each level
+const ANVIL   = { start: 300, growth: 5 };      // anvil level 1 -> 2 costs 300, then x5 each level
+
+// ---------- Reincarnation and Souls ----------
+// Reincarnating starts a new run: coins, ore, miners, mines, upgrades, gear, essences and monster
+// progress reset. You keep learned skills, Souls and attributes, and you earn new Souls.
+const REINCARNATION = {
+  priceGrowth: 1.25,     // every reincarnation makes miners, mines, upgrades and skills 25% pricier (stacks)
+  soulsPerDepth: 2,      // Souls from monsters = soulsPerDepth x (deepest monster beaten) ^ depthPower
+  depthPower: 1.4,       //   e.g. 1st boss (5th monster) = 19 Souls, last boss (20th) = 132 Souls
+  coinsPerSoul: 500,     // Souls from coins = square root of (coins earned this run / coinsPerSoul)
+};                       //   e.g. 50K coins = 10 Souls, 5M coins = 100 Souls
+
+// Permanent attributes bought with Souls. Each point adds a flat bonus to the hero's stats.
+// The Soul price of the next point = baseCost x growth ^ (points you already have), rounded up.
+const ATTRIBUTE_MAX = 99;
+const ATTRIBUTES = [
+  { id: "hp",      perPoint: 10, baseCost: 1, growth: 1.15, desc: "+10 max HP per point" },
+  { id: "attack",  perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 attack per point" },
+  { id: "defense", perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 defense per point" },
+  { id: "agility", perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 agility per point (dodge more, strike first)" },
+  { id: "luck",    perPoint: 1,  baseCost: 2, growth: 1.15, desc: "+1% critical hit chance per point (crits do 2x damage)" },
+];
+const attributeById = Object.fromEntries(ATTRIBUTES.map(a => [a.id, a]));
 
 // ---------- Elements ----------
 
@@ -271,8 +298,15 @@ function freshState() {
     skills: {},           // skill id -> level (0 = not bought yet)
     skillSlots: [null, null, null], // skill ids equipped for battle
     battle: null,         // the fight in progress, saved so a reload can't skip it
+    runCoins: 0,          // coins earned since the last reincarnation (gives Souls)
+    // Kept when you reincarnate:
+    souls: 0,             // Souls to spend on attributes
+    attributes: {},       // attribute id -> points bought (0-99)
+    reincarnations: 0,    // how many times you've reincarnated (prices go up each time)
+    totalSouls: 0,        // all Souls ever earned
     lastSaved: Date.now(),
   };
+  for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
   for (const e of ELEMENTS) s.drops[e.id] = 0;
   for (const o of ORES) {
     s.ore[o.id] = 0;
@@ -309,7 +343,12 @@ function migrate(saved) {
     saved.skillSlots = [null, null, null];
     saved.version = 4;
   }
-  // Later versions add their steps here (reincarnation...).
+  if (saved.version < 5) {
+    // v4 -> v5: reincarnation. Count the coins you have now as earned this run, so your first Souls aren't zero.
+    saved.runCoins = saved.coins || 0;
+    saved.version = 5;
+  }
+  // Later versions add their steps here.
   return saved;
 }
 
@@ -322,10 +361,10 @@ function load() {
     if (!raw) return s;
     const saved = migrate(JSON.parse(raw));
     // Merge so older saves still work when new ores or items are added.
-    for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved"]) {
+    for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved", "runCoins", "souls", "reincarnations", "totalSouls"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
-    for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills"]) {
+    for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills", "attributes"]) {
       for (const [k, v] of Object.entries(saved[key] || {})) {
         if (k in s[key]) s[key][k] = v;
       }
@@ -362,9 +401,13 @@ function save() {
 
 const oreById = Object.fromEntries(ORES.map(o => [o.id, o]));
 
+// Every reincarnation multiplies coin and skill prices by this (1 on your first run).
+function runPriceMult() { return Math.pow(REINCARNATION.priceGrowth, state.reincarnations); }
+
 function minerCost(ore) {
-  return Math.ceil(ore.minerCost * Math.pow(MINER_COST_GROWTH, state.miners[ore.id]));
+  return Math.ceil(ore.minerCost * Math.pow(MINER_COST_GROWTH, state.miners[ore.id]) * runPriceMult());
 }
+function unlockCost(ore) { return Math.ceil(ore.unlockCost * runPriceMult()); }
 function orePerSecond(ore) {
   return state.miners[ore.id] * ore.perSecPerMiner;
 }
@@ -372,15 +415,34 @@ function clickAmount(ore) {
   // Harder ores give less per click, but never less than a fraction.
   return state.pickaxe * ore.perSecPerMiner;
 }
-function pickaxeCost() { return Math.ceil(50 * Math.pow(3, state.pickaxe - 1)); }
-function anvilCost()   { return Math.ceil(200 * Math.pow(4, state.anvil - 1)); }
+function pickaxeCost() { return Math.ceil(PICKAXE.start * Math.pow(PICKAXE.growth, state.pickaxe - 1) * runPriceMult()); }
+function anvilCost()   { return Math.ceil(ANVIL.start * Math.pow(ANVIL.growth, state.anvil - 1) * runPriceMult()); }
 function priceMultiplier() { return 1 + (state.anvil - 1) * 0.25; }
 function sellPrice(recipe) { return Math.floor(recipe.price * priceMultiplier()); }
 
-// The hero's total stats: base stats plus everything equipped.
-// Battles (coming later) read their numbers from here.
+// Flat stat bonus from Soul attributes, e.g. { hp: 50, attack: 3, ... }.
+function attributeStats() {
+  const total = {};
+  for (const a of ATTRIBUTES) total[a.id] = (state.attributes[a.id] || 0) * a.perPoint;
+  return total;
+}
+
+// Stat bonus from equipped gear only.
+function gearStats() {
+  const total = {};
+  for (const st of STATS) total[st.id] = 0;
+  for (const slot of SLOTS) {
+    const item = state.equipped[slot.id];
+    if (!item) continue;
+    for (const [k, v] of Object.entries(recipeById[item.id].stats)) total[k] += v;
+  }
+  return total;
+}
+
+// The hero's total stats: base stats + equipped gear + Soul attributes. Battles read their numbers from here.
 function heroStats() {
   const total = { ...HERO_BASE_STATS };
+  for (const [k, v] of Object.entries(attributeStats())) total[k] += v;
   for (const slot of SLOTS) {
     const item = state.equipped[slot.id];
     if (!item) continue;
@@ -404,7 +466,7 @@ function bagCount(r) { return itemKeysOf(r).reduce((n, k) => n + state.items[k],
 // ---------- Skill rules ----------
 
 function skillLevel(id) { return state.skills[id] || 0; }
-function skillBuyCost(sk) { return skillGrade(sk).cost; }
+function skillBuyCost(sk) { return Math.ceil(skillGrade(sk).cost * runPriceMult()); }
 function skillLevelCost(sk) {
   return Math.ceil(skillBuyCost(sk) * SKILL_LEVEL_COST_START * Math.pow(SKILL_LEVEL_COST_GROWTH, skillLevel(sk.id) - 1));
 }
@@ -459,6 +521,12 @@ function rollHit({ attack, defense, attackEl, targetEl, critChance, dodge, extra
 
 // ---------- Actions ----------
 
+// All coin income goes through here, so we know how much you earned this run (for Souls).
+function earnCoins(n) {
+  state.coins += n;
+  state.runCoins += n;
+}
+
 function mine(oreId) {
   const ore = oreById[oreId];
   if (!state.unlocked[oreId]) return;
@@ -477,8 +545,9 @@ function hireMiner(oreId) {
 
 function unlockOre(oreId) {
   const ore = oreById[oreId];
-  if (state.unlocked[oreId] || state.coins < ore.unlockCost) return;
-  state.coins -= ore.unlockCost;
+  const cost = unlockCost(ore);
+  if (state.unlocked[oreId] || state.coins < cost) return;
+  state.coins -= cost;
   state.unlocked[oreId] = true;
   log(`You opened a ${ore.name} mine!`);
   buildUI();
@@ -513,7 +582,7 @@ function sell(recipeId) {
   if (n <= 0) return 0;
   for (const k of itemKeysOf(r)) state.items[k] = 0;
   const coins = n * sellPrice(r);
-  state.coins += coins;
+  earnCoins(coins);
   render();
   return coins;
 }
@@ -756,7 +825,7 @@ function endBattle(result) {
     const firstWin = !state.beaten[m.id];
     state.beaten[m.id] = (state.beaten[m.id] || 0) + 1;
     state.drops[m.element] += m.reward.drops;
-    state.coins += m.reward.coins;
+    earnCoins(m.reward.coins);
     const e = elementById[m.element];
     battleLog(`You win! You get ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`);
     const next = MONSTERS[m.index + 1];
@@ -796,6 +865,59 @@ function buyAnvil() {
   state.coins -= cost;
   state.anvil += 1;
   render();
+}
+
+// ---------- Reincarnation ----------
+
+// How far down the monster ladder you've won (0 = no wins, 20 = beat the last boss).
+function deepestBeaten() {
+  let depth = 0;
+  for (const m of MONSTERS) if (state.beaten[m.id]) depth = Math.max(depth, m.index + 1);
+  return depth;
+}
+
+// Souls you'd get if you reincarnated right now, and where they come from.
+function soulsPreview() {
+  const depth = deepestBeaten();
+  const fromMonsters = Math.floor(REINCARNATION.soulsPerDepth * Math.pow(depth, REINCARNATION.depthPower));
+  const fromCoins = Math.floor(Math.sqrt(state.runCoins / REINCARNATION.coinsPerSoul));
+  return { depth, fromMonsters, fromCoins, total: fromMonsters + fromCoins };
+}
+
+function attributeLevel(id) { return state.attributes[id] || 0; }
+function attributeCost(a) { return Math.ceil(a.baseCost * Math.pow(a.growth, attributeLevel(a.id))); }
+
+// Spend Souls on one point of an attribute. Points are permanent.
+function buyAttribute(id) {
+  const a = attributeById[id];
+  const cost = attributeCost(a);
+  if (attributeLevel(id) >= ATTRIBUTE_MAX || state.souls < cost) return;
+  state.souls -= cost;
+  state.attributes[id] = attributeLevel(id) + 1;
+  save();
+  render();
+}
+
+// Start a new run. Keeps skills, skill slots, Souls, attributes and lifetime counters.
+function reincarnate() {
+  if (state.battle) return; // finish the fight first
+  const gained = soulsPreview().total;
+  const keep = {
+    skills: state.skills,
+    skillSlots: state.skillSlots,
+    attributes: state.attributes,
+    souls: state.souls + gained,
+    totalSouls: state.totalSouls + gained,
+    reincarnations: state.reincarnations + 1,
+    totalSmithed: state.totalSmithed,
+  };
+  state = Object.assign(freshState(), keep);
+  forgeOre = "copper";
+  forgeElement = null;
+  save();
+  renderBattle();
+  buildUI();
+  log(`You are reborn! +${fmt(gained)} 👻 Souls. Spend them on attributes.`);
 }
 
 // ---------- UI ----------
@@ -1198,6 +1320,98 @@ function renderMerchant() {
   }
 }
 
+// ---------- Souls panel ----------
+
+let reincarnateOpen = false; // is the "are you sure?" box showing
+
+function buildSouls() {
+  refs.attrs = {};
+  const box = document.getElementById("attributes");
+  box.innerHTML = "";
+  for (const a of ATTRIBUTES) {
+    const st = STATS.find(x => x.id === a.id);
+    const card = el(`
+      <div class="card attr">
+        <div class="row">
+          <span class="name">${st.icon} ${st.name} <span class="small num">Lv <span data-k="lvl"></span>/${ATTRIBUTE_MAX}</span></span>
+          <span class="stats-line" data-k="bonus"></span>
+        </div>
+        <div class="small">${a.desc}</div>
+        <div class="buttons"><button class="primary" data-k="buy"></button></div>
+      </div>`);
+    card.querySelector('[data-k="buy"]').onclick = () => buyAttribute(a.id);
+    refs.attrs[a.id] = card;
+    box.appendChild(card);
+  }
+
+  const r = document.getElementById("reincarnate");
+  r.innerHTML = "";
+  refs.rebirth = el(`
+    <div class="card rebirth">
+      <div class="name">🔁 Reincarnate</div>
+      <div class="small">Start over to earn Souls. The deeper you got in Adventure and the more coins you earned this run, the more Souls you get.</div>
+      <div class="souls-preview">
+        <div class="row"><span>Deepest monster beaten</span><span class="num" data-k="depth"></span></div>
+        <div class="row"><span>Souls from monsters</span><span class="num" data-k="fromMonsters"></span></div>
+        <div class="row"><span>Coins earned this run</span><span class="num" data-k="runCoins"></span></div>
+        <div class="row"><span>Souls from coins</span><span class="num" data-k="fromCoins"></span></div>
+        <div class="row total"><span>You would gain</span><span class="num" data-k="gain"></span></div>
+      </div>
+      <div class="small" data-k="priceNote"></div>
+      <div class="buttons"><button class="danger" data-k="open">Reincarnate…</button></div>
+      <div class="confirm" data-k="confirm" hidden>
+        <div class="name">Are you sure?</div>
+        <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, all gear (in your bag and equipped), unspent essences, monster progress and rest timers.</div>
+        <div class="small"><b>You keep:</b> learned skills and their levels, skill slots, Souls and attributes.</div>
+        <div class="small"><b>Next run:</b> <span data-k="nextPrices"></span></div>
+        <div class="buttons">
+          <button class="primary" data-k="yes"></button>
+          <button data-k="no">Cancel</button>
+        </div>
+      </div>
+    </div>`);
+  refs.rebirth.querySelector('[data-k="open"]').onclick = () => { reincarnateOpen = true; render(); };
+  refs.rebirth.querySelector('[data-k="no"]').onclick = () => { reincarnateOpen = false; render(); };
+  refs.rebirth.querySelector('[data-k="yes"]').onclick = () => { reincarnateOpen = false; reincarnate(); };
+  r.appendChild(refs.rebirth);
+}
+
+function renderSouls() {
+  set(document.getElementById("souls-bar"), "souls", fmt(state.souls));
+  set(document.getElementById("souls-bar"), "lives", String(state.reincarnations));
+  set(document.getElementById("souls-bar"), "priceMult", runPriceMult().toFixed(2));
+  for (const a of ATTRIBUTES) {
+    const card = refs.attrs[a.id];
+    const lvl = attributeLevel(a.id);
+    set(card, "lvl", String(lvl));
+    set(card, "bonus", lvl > 0 ? `+${fmt(lvl * a.perPoint)}${a.id === "luck" ? "%" : ""}` : "");
+    const btn = card.querySelector('[data-k="buy"]');
+    const maxed = lvl >= ATTRIBUTE_MAX;
+    const label = maxed ? "Maxed" : `+1 for ${fmt(attributeCost(a))} 👻`;
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.disabled = maxed || state.souls < attributeCost(a);
+  }
+
+  const p = soulsPreview();
+  const rb = refs.rebirth;
+  const deepest = p.depth > 0 ? MONSTERS[p.depth - 1] : null;
+  set(rb, "depth", deepest ? `${deepest.icon} ${deepest.name} (#${p.depth})` : "None yet");
+  set(rb, "fromMonsters", fmt(p.fromMonsters));
+  set(rb, "runCoins", fmt(state.runCoins));
+  set(rb, "fromCoins", fmt(p.fromCoins));
+  set(rb, "gain", `+${fmt(p.total)} 👻`);
+  const nextMult = runPriceMult() * REINCARNATION.priceGrowth;
+  set(rb, "priceNote", `Each reincarnation makes miners, mines, upgrades and skills ${Math.round((REINCARNATION.priceGrowth - 1) * 100)}% pricier. Prices now: ×${runPriceMult().toFixed(2)}.`);
+  set(rb, "nextPrices", `miners, mines, upgrades and skills cost ×${nextMult.toFixed(2)} of their starting price.`);
+  set(rb, "yes", `Yes, reincarnate for +${fmt(p.total)} 👻`);
+  const openBtn = rb.querySelector('[data-k="open"]');
+  openBtn.hidden = reincarnateOpen;
+  openBtn.disabled = !!state.battle;
+  openBtn.title = state.battle ? "Finish your fight first." : "";
+  rb.querySelector('[data-k="confirm"]').hidden = !reincarnateOpen;
+  rb.querySelector('[data-k="yes"]').disabled = !!state.battle;
+}
+
 function buildUI() {
   refs = { ores: {}, recipes: {} };
 
@@ -1227,7 +1441,7 @@ function buildUI() {
         <div class="card locked">
           <div class="row">
             <span class="name">${o.icon} ${o.name} mine (locked)</span>
-            <button data-k="unlock" class="primary">Open for ${fmt(o.unlockCost)} 🪙</button>
+            <button data-k="unlock" class="primary">Open for <span data-k="unlockCost"></span> 🪙</button>
           </div>
         </div>`);
       card.querySelector('[data-k="unlock"]').onclick = () => unlockOre(o.id);
@@ -1241,6 +1455,7 @@ function buildUI() {
   buildHero();
   buildAdventure();
   buildMerchant();
+  buildSouls();
 
   const upBox = document.getElementById("upgrades");
   upBox.innerHTML = "";
@@ -1288,7 +1503,8 @@ function render() {
       set(card, "hireCost", fmt(cost));
       card.querySelector('[data-k="hire"]').disabled = state.coins < cost;
     } else {
-      card.querySelector('[data-k="unlock"]').disabled = state.coins < o.unlockCost;
+      set(card, "unlockCost", fmt(unlockCost(o)));
+      card.querySelector('[data-k="unlock"]').disabled = state.coins < unlockCost(o);
     }
   }
 
@@ -1326,11 +1542,16 @@ function render() {
   renderMerchant();
 
   const hero = heroStats();
+  const gear = gearStats();
+  const attrs = attributeStats();
   for (const st of STATS) {
-    const bonus = hero[st.id] - HERO_BASE_STATS[st.id];
-    set(refs.stats[st.id], "total", fmt(hero[st.id]));
-    set(refs.stats[st.id], "bonus", bonus > 0 ? `(+${fmt(bonus)} from gear)` : "");
+    const parts = [];
+    if (gear[st.id] > 0) parts.push(`+${fmt(gear[st.id])} gear`);
+    if (attrs[st.id] > 0) parts.push(`+${fmt(attrs[st.id])} souls`);
+    set(refs.stats[st.id], "total", fmt(hero[st.id]) + (st.id === "luck" ? "%" : ""));
+    set(refs.stats[st.id], "bonus", parts.length ? `(${parts.join(", ")})` : "");
   }
+  renderSouls();
   for (const slot of SLOTS) {
     const row = refs.slots[slot.id];
     const item = state.equipped[slot.id];
@@ -1373,7 +1594,8 @@ function start() {
   document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
 
   document.getElementById("reset").onclick = () => {
-    if (!confirm("Start over? This erases all your progress.")) return;
+    if (!confirm("Start over? This erases ALL your progress, including Souls, attributes and skills. (To start a new run and keep them, use Reincarnate instead.)")) return;
+    reincarnateOpen = false;
     state = freshState();
     save();
     renderBattle();

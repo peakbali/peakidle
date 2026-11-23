@@ -16,6 +16,8 @@ A small idle game you play in your browser. Mine ore, smith weapons and armor, s
 6. **Merchant**: spend essences on 15 skills (3 per element: low, mid and high grade, costing 1, 2 or 3 mana). Most deal elemental damage, some heal, guard, stun or weaken. Buy a skill again to level it up (+25% strength per level, each level costs more). Equip up to 3 skills for your next fight. Skill power adds to your attack for skills, so a staff helps a lot.
 7. **Elemental weapons**: in the Forge, pick an element above the weapons before you smith. The new weapon costs some essences too, and your basic attack then uses that element.
 8. **Spend coins** on miners (they dig for you, even while the game is closed, up to 8 hours), a better pickaxe (more ore per click), a master anvil (gear sells for more), and new mines: iron, gold and mithril.
+9. **Reincarnate** (Souls panel) whenever you like to start a new run and earn 👻 **Souls**. You get more Souls the deeper you got in Adventure and the more coins you earned that run, and you see how many before you confirm. Reincarnating resets coins, ore, miners, mines, upgrades, gear, essences and monster progress, but you **keep your learned skills, Souls and attributes**. Each reincarnation also makes miners, mines, upgrades and skills 25% pricier.
+10. **Attributes**: spend Souls on HP, Attack, Defense, Agility and Luck (0 to 99 points each). Each point gives a flat bonus that adds to your gear, forever. Every point costs more Souls than the last. Luck is your critical hit chance in %.
 
 Your progress saves automatically in your browser.
 
@@ -28,4 +30,4 @@ Your progress saves automatically in your browser.
 
 - `index.html`: the page layout
 - `style.css`: colors and layout
-- `game.js`: all the game rules. Ores, gear types, stats, elements, monsters, prices and upgrades are at the top, easy to tweak.
+- `game.js`: all the game rules. Ores, gear types, stats, elements, monsters, prices, upgrades, Souls and attributes are at the top, easy to tweak.
