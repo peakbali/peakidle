@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 3;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 4;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -11,14 +11,15 @@ const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 //   statMult: how much stronger gear of this material is than copper gear
 //   costMult: how much more ore a piece of gear needs than the copper version
 //   gearValue: coins per ore used when the gear is sold
+//   infuseCost: essences needed to give one weapon of this material an element while smithing it
 const ORES = [
-  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 15,   unlockCost: 0,     statMult: 1,   costMult: 1,   gearValue: 1.25 },
-  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 120,  unlockCost: 100,   statMult: 2.2, costMult: 1.5, gearValue: 6 },
-  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 900,  unlockCost: 1500,  statMult: 4.5, costMult: 2,   gearValue: 36 },
-  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 6000, unlockCost: 20000, statMult: 9,   costMult: 2.5, gearValue: 270 },
+  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 15,   unlockCost: 0,     statMult: 1,   costMult: 1,   gearValue: 1.25, infuseCost: 3 },
+  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 120,  unlockCost: 100,   statMult: 2.2, costMult: 1.5, gearValue: 6,    infuseCost: 8 },
+  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 900,  unlockCost: 1500,  statMult: 4.5, costMult: 2,   gearValue: 36,   infuseCost: 20 },
+  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 6000, unlockCost: 20000, statMult: 9,   costMult: 2.5, gearValue: 270,  infuseCost: 50 },
 ];
 
-// The hero's stats. "power" boosts skills (skills arrive in a later update).
+// The hero's stats. "power" (skill power) makes your skills hit harder.
 // Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes later.
 const STATS = [
   { id: "hp",      name: "HP",          icon: "❤️" },
@@ -59,7 +60,7 @@ const GEAR_TYPES = [
 ];
 
 // All recipes, built from every ore x every gear type (e.g. "iron_bow").
-// cost: ore needed. price: coins when sold. element: weapons will get one later (fire, water, ...).
+// cost: ore needed. price: coins when sold. Weapons can get an element while smithing (see smith()).
 const RECIPES = [];
 for (const ore of ORES) {
   for (const type of GEAR_TYPES) {
@@ -77,7 +78,6 @@ for (const ore of ORES) {
       cost,
       price: Math.round(cost * ore.gearValue),
       stats,
-      element: null, // not used yet
     });
   }
 }
@@ -122,6 +122,57 @@ function elementMultiplier(attackEl, targetEl) {
   if (elementById[targetEl].beats === attackEl) return RESISTED_HIT;
   return 1;
 }
+
+// ---------- Skills ----------
+
+// The merchant sells 15 skills: 3 grades for each element.
+// Grade 1/2/3 costs 1/2/3 mana in battle. Skills are bought and levelled up with essences of their element.
+//   cost: essences to buy (rises steeply by grade)
+const SKILL_GRADES = [
+  { grade: 1, name: "Low",  mana: 1, cost: 8 },
+  { grade: 2, name: "Mid",  mana: 2, cost: 50 },
+  { grade: 3, name: "High", mana: 3, cost: 300 },
+];
+// Levelling: each level makes the skill 25% stronger (damage and healing).
+// The essence cost of the next level grows by x1.7 each time.
+const SKILL_LEVEL_BONUS = 0.25;
+const SKILL_LEVEL_COST_START = 0.6; // level 1 -> 2 costs 60% of the buy price
+const SKILL_LEVEL_COST_GROWTH = 1.7;
+
+// What a skill can do (any mix):
+//   power:    damage = (attack + skill power) x power. Skills never miss and can crit.
+//   hits:     how many times it strikes (default 1)
+//   heal:     heals this share of your max HP (also grows with skill power)
+//   guard:    you guard this turn as well
+//   stun:     chance (0-1) the monster loses its next turn
+//   interrupt: cancels a heavy attack the monster is winding up
+//   weaken:   monster deals 35% less damage for this many turns
+//   critBonus: extra crit chance for this skill
+const SKILLS = [
+  // Fire: raw damage
+  { id: "firebolt",      element: "fire",      grade: 1, name: "Firebolt",         power: 1.7, desc: "Hurl a bolt of flame." },
+  { id: "flame_lash",    element: "fire",      grade: 2, name: "Flame Lash",       power: 2.4, hits: 2, desc: "Two burning whip strikes." },
+  { id: "meteor",        element: "fire",      grade: 3, name: "Meteor",           power: 5.5, desc: "Call down a blazing rock. Huge damage." },
+  // Ice: control
+  { id: "ice_spear",     element: "ice",       grade: 1, name: "Ice Spear",        power: 1.5, desc: "A sharp spear of ice." },
+  { id: "frost_armor",   element: "ice",       grade: 2, name: "Frost Armor",      power: 1.4, guard: true, desc: "Strike, then guard behind a shell of ice this turn." },
+  { id: "glacial_prison",element: "ice",       grade: 3, name: "Glacial Prison",   power: 3.5, stun: 1, desc: "Freeze the foe solid. It loses its next turn." },
+  // Wind: speed and healing
+  { id: "gust",          element: "wind",      grade: 1, name: "Gust",             power: 1.3, interrupt: true, desc: "A sharp blast that breaks a heavy attack wind-up." },
+  { id: "healing_breeze",element: "wind",      grade: 2, name: "Healing Breeze",   heal: 0.3, desc: "Heal 30% of your max HP (more with skill power)." },
+  { id: "cyclone",       element: "wind",      grade: 3, name: "Cyclone",          power: 1.6, hits: 3, desc: "Three spinning slashes, each can crit." },
+  // Earth: toughness
+  { id: "stone_fist",    element: "earth",     grade: 1, name: "Stone Fist",       power: 1.6, desc: "A heavy punch of rock." },
+  { id: "stone_skin",    element: "earth",     grade: 2, name: "Stone Skin",       power: 1.0, weaken: 3, desc: "Strike and harden: the foe deals 35% less damage for 3 turns." },
+  { id: "earthquake",    element: "earth",     grade: 3, name: "Earthquake",       power: 4.5, interrupt: true, desc: "Shake the ground. Big damage and breaks a wind-up." },
+  // Lightning: crits and stuns
+  { id: "spark",         element: "lightning", grade: 1, name: "Spark",            power: 1.4, stun: 0.25, desc: "A quick zap. 25% chance to stun." },
+  { id: "chain_lightning",element:"lightning", grade: 2, name: "Chain Lightning",  power: 2.9, critBonus: 0.2, desc: "Crackling bolt with +20% crit chance." },
+  { id: "thunder_judgment",element:"lightning",grade: 3, name: "Thunder Judgment", power: 4.2, critBonus: 0.35, stun: 0.5, desc: "+35% crit chance and 50% chance to stun." },
+];
+const skillById = Object.fromEntries(SKILLS.map(sk => [sk.id, sk]));
+function skillGrade(sk) { return SKILL_GRADES[sk.grade - 1]; }
+const WEAKEN_MULT = 0.65; // weakened monsters deal 35% less damage
 
 // ---------- Monsters ----------
 
@@ -175,7 +226,7 @@ const BATTLE = {
   startMana: 3,
   manaPerTurn: 1,
   maxMana: 5,
-  skillSlots: 3,          // skills arrive with the merchant (step 3)
+  skillSlots: 3,          // equip skills from the merchant into these
   critMultiplier: 2,      // a critical hit does double damage; crit chance = luck %
   heavyEvery: 3,          // monsters wind up a heavy attack every 3rd turn
   heavyMultiplier: 1.8,
@@ -212,12 +263,13 @@ function freshState() {
     anvil: 1,             // sell price multiplier level
     totalSmithed: 0,
     ore: {}, miners: {}, unlocked: {},
-    items: {},            // smithed gear in your bag: recipe id -> how many
+    items: {},            // smithed gear in your bag: item key -> how many (see itemKey)
     equipped: {},         // slot id -> { id: recipe id, element } or null
     drops: {},            // element id -> how many essences you have
     beaten: {},           // monster id -> how many times you've won against it
     cooldowns: {},        // monster id -> time (ms) when it can be fought again
-    skillSlots: [null, null, null], // equipped skills (step 3)
+    skills: {},           // skill id -> level (0 = not bought yet)
+    skillSlots: [null, null, null], // skill ids equipped for battle
     battle: null,         // the fight in progress, saved so a reload can't skip it
     lastSaved: Date.now(),
   };
@@ -227,7 +279,11 @@ function freshState() {
     s.miners[o.id] = 0;
     s.unlocked[o.id] = o.unlockCost === 0;
   }
-  for (const r of RECIPES) s.items[r.id] = 0;
+  for (const r of RECIPES) {
+    s.items[r.id] = 0;
+    if (r.slot === "weapon") for (const e of ELEMENTS) s.items[itemKey(r.id, e.id)] = 0;
+  }
+  for (const sk of SKILLS) s.skills[sk.id] = 0;
   for (const slot of SLOTS) s.equipped[slot.id] = null;
   return s;
 }
@@ -248,7 +304,12 @@ function migrate(saved) {
     // v2 -> v3: monsters, battles and drops. New fields start empty (freshState fills them in).
     saved.version = 3;
   }
-  // Later versions add their steps here (skills, reincarnation...).
+  if (saved.version < 4) {
+    // v3 -> v4: merchant skills and elemental weapons. New fields start empty.
+    saved.skillSlots = [null, null, null];
+    saved.version = 4;
+  }
+  // Later versions add their steps here (reincarnation...).
   return saved;
 }
 
@@ -264,7 +325,7 @@ function load() {
     for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
-    for (const key of ["ore", "miners", "unlocked", "items", "drops"]) {
+    for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills"]) {
       for (const [k, v] of Object.entries(saved[key] || {})) {
         if (k in s[key]) s[key][k] = v;
       }
@@ -272,8 +333,12 @@ function load() {
     for (const slot of SLOTS) {
       const item = saved.equipped && saved.equipped[slot.id];
       const r = item && recipeById[item.id];
-      if (r && r.slot === slot.id) s.equipped[slot.id] = { id: r.id, element: item.element || null };
+      const element = slot.id === "weapon" && elementById[item && item.element] ? item.element : null;
+      if (r && r.slot === slot.id) s.equipped[slot.id] = { id: r.id, element };
     }
+    (saved.skillSlots || []).slice(0, BATTLE.skillSlots).forEach((id, i) => {
+      if (skillById[id] && s.skills[id] > 0 && !s.skillSlots.includes(id)) s.skillSlots[i] = id;
+    });
     for (const k of ["beaten", "cooldowns"]) {
       for (const [id, v] of Object.entries(saved[k] || {})) if (monsterById[id]) s[k][id] = v;
     }
@@ -328,6 +393,25 @@ function statsText(stats) {
   return STATS.filter(st => stats[st.id]).map(st => `+${stats[st.id]} ${st.name.toLowerCase()}`).join(", ");
 }
 
+// Weapons with an element are kept apart in the bag: "iron_sword" is neutral, "iron_sword:fire" is a fire one.
+function itemKey(recipeId, element) { return element ? `${recipeId}:${element}` : recipeId; }
+// All bag keys for one recipe: the neutral one, plus one per element for weapons.
+function itemKeysOf(r) {
+  return r.slot === "weapon" ? [r.id, ...ELEMENTS.map(e => itemKey(r.id, e.id))] : [r.id];
+}
+function bagCount(r) { return itemKeysOf(r).reduce((n, k) => n + state.items[k], 0); }
+
+// ---------- Skill rules ----------
+
+function skillLevel(id) { return state.skills[id] || 0; }
+function skillBuyCost(sk) { return skillGrade(sk).cost; }
+function skillLevelCost(sk) {
+  return Math.ceil(skillBuyCost(sk) * SKILL_LEVEL_COST_START * Math.pow(SKILL_LEVEL_COST_GROWTH, skillLevel(sk.id) - 1));
+}
+// Essences needed for the next step: buying it, or its next level.
+function skillNextCost(sk) { return skillLevel(sk.id) > 0 ? skillLevelCost(sk) : skillBuyCost(sk); }
+function skillLevelMult(level) { return 1 + SKILL_LEVEL_BONUS * (level - 1); }
+
 function addOre(dt) {
   for (const o of ORES) state.ore[o.id] += orePerSecond(o) * dt;
 }
@@ -342,7 +426,7 @@ function areaUnlocked(area) { return monsterUnlocked(monsterById[area.monsters[0
 function cooldownLeft(m) { return Math.max(0, (state.cooldowns[m.id] || 0) - Date.now()); }
 function canFight(m) { return !state.battle && monsterUnlocked(m) && cooldownLeft(m) === 0; }
 
-// The element your basic attack uses: the equipped weapon's (null = neutral, until enchanting arrives).
+// The element your basic attack uses: the equipped weapon's (null = neutral).
 function weaponElement() {
   const w = state.equipped.weapon;
   return (w && w.element) || null;
@@ -400,23 +484,34 @@ function unlockOre(oreId) {
   buildUI();
 }
 
-function smith(recipeId, count) {
+// How many of a recipe you can smith right now. Elemental weapons also need essences.
+function smithLimit(r, element) {
+  let n = Math.floor(state.ore[r.ore] / r.cost);
+  if (element) n = Math.min(n, Math.floor(state.drops[element] / oreById[r.ore].infuseCost));
+  return n;
+}
+
+// element: only for weapons. The weapon is infused with it while it's made, for essences.
+function smith(recipeId, count, element = null) {
   const r = recipeById[recipeId];
-  const canMake = Math.floor(state.ore[r.ore] / r.cost);
+  if (r.slot !== "weapon") element = null;
+  const canMake = smithLimit(r, element);
   const n = count === "max" ? canMake : Math.min(count, canMake);
   if (n <= 0) return;
   state.ore[r.ore] -= n * r.cost;
-  state.items[r.id] += n;
+  if (element) state.drops[element] -= n * oreById[r.ore].infuseCost;
+  state.items[itemKey(r.id, element)] += n;
   state.totalSmithed += n;
   render();
 }
 
 // Selling only sells gear in your bag. Equipped gear is safe. Sold gear is gone for good.
+// Elemental weapons sell for the same as plain ones (the essences are not refunded).
 function sell(recipeId) {
   const r = recipeById[recipeId];
-  const n = state.items[r.id];
+  const n = bagCount(r);
   if (n <= 0) return 0;
-  state.items[r.id] = 0;
+  for (const k of itemKeysOf(r)) state.items[k] = 0;
   const coins = n * sellPrice(r);
   state.coins += coins;
   render();
@@ -430,20 +525,56 @@ function sellAllOf(oreId) {
 }
 
 // Wear one item from your bag. Whatever was in that slot goes back to your bag.
-function equip(recipeId) {
+function equip(recipeId, element = null) {
   const r = recipeById[recipeId];
-  if (state.items[r.id] <= 0) return;
+  if (r.slot !== "weapon") element = null;
+  const key = itemKey(r.id, element);
+  if (state.items[key] <= 0) return;
   unequip(r.slot);
-  state.items[r.id] -= 1;
-  state.equipped[r.slot] = { id: r.id, element: null };
+  state.items[key] -= 1;
+  state.equipped[r.slot] = { id: r.id, element };
   render();
 }
 
 function unequip(slotId) {
   const item = state.equipped[slotId];
   if (!item) return;
-  state.items[item.id] += 1;
+  state.items[itemKey(item.id, item.element)] += 1;
   state.equipped[slotId] = null;
+  render();
+}
+
+// ---------- Merchant actions ----------
+
+// Buy a skill, or level it up if you already own it. Paid with essences of its element.
+function buySkill(skillId) {
+  const sk = skillById[skillId];
+  const cost = skillNextCost(sk);
+  if (state.drops[sk.element] < cost) return;
+  state.drops[sk.element] -= cost;
+  state.skills[sk.id] = skillLevel(sk.id) + 1;
+  if (state.skills[sk.id] === 1) {
+    log(`You learned ${sk.name}!`);
+    const free = state.skillSlots.indexOf(null);
+    if (free >= 0) state.skillSlots[free] = sk.id; // put it straight into an empty slot
+  } else {
+    log(`${sk.name} is now level ${state.skills[sk.id]}.`);
+  }
+  save();
+  render();
+}
+
+// Put an owned skill into the first empty slot. New fights use the new slots.
+function equipSkill(skillId) {
+  if (skillLevel(skillId) <= 0 || state.skillSlots.includes(skillId)) return;
+  const free = state.skillSlots.indexOf(null);
+  if (free < 0) return;
+  state.skillSlots[free] = skillId;
+  render();
+}
+
+function unequipSkill(index) {
+  state.skillSlots[index] = null;
   render();
 }
 
@@ -458,6 +589,10 @@ function startBattle(monsterId) {
   state.battle = {
     monsterId: m.id,
     hero: { ...hero, element: weaponElement() },
+    // Skills you brought, with their level, locked in like your stats.
+    skills: state.skillSlots.map(id => id ? { id, level: skillLevel(id) } : null),
+    stunned: false,    // the monster loses its next turn
+    weakTurns: 0,      // turns left that the monster deals less damage
     heroHp: hero.hp,
     monsterHp: m.stats.hp,
     mana: BATTLE.startMana,
@@ -511,8 +646,14 @@ function battleAction(action) {
   } else if (action === "flee") {
     battleLog("You run away. No harm done.");
     return endBattle("fled");
+  } else if (/^skill[0-9]$/.test(action)) {
+    const slot = (b.skills || [])[Number(action.slice(5))];
+    const sk = slot && skillById[slot.id];
+    if (!sk || b.mana < skillGrade(sk).mana) return;
+    b.mana -= skillGrade(sk).mana;
+    castSkill(sk, slot.level, m);
   } else {
-    return; // unknown action (skills come later)
+    return; // unknown action
   }
 
   if (b.monsterHp <= 0) return endBattle("win");
@@ -526,9 +667,63 @@ function battleAction(action) {
   renderBattle();
 }
 
+// Use a skill. Mana is already paid. Skills never miss.
+function castSkill(sk, level, m) {
+  const b = state.battle;
+  const e = elementById[sk.element];
+  const lvl = skillLevelMult(level);
+  battleLog(`You cast ${e.icon} ${sk.name}!`);
+  if (sk.guard) b.guarding = true;
+  if (sk.power) {
+    // Skill power adds to your attack for skills, so a staff makes skills much stronger.
+    const attack = (b.hero.attack + b.hero.power) * sk.power * lvl;
+    for (let i = 0; i < (sk.hits || 1) && b.monsterHp > 0; i++) {
+      const hit = rollHit({
+        attack, defense: m.stats.defense,
+        attackEl: sk.element, targetEl: m.element,
+        critChance: b.hero.luck / 100 + (sk.critBonus || 0),
+        dodge: 0,
+      });
+      b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
+      let msg = `${sk.name} hits ${m.name} for ${hit.damage}.`;
+      if (hit.crit) msg += " Critical hit!";
+      if (hit.mult > 1) msg += " It's weak to that!";
+      if (hit.mult < 1) msg += " It resists that.";
+      battleLog(msg);
+    }
+  }
+  if (sk.heal) {
+    const amount = Math.round(b.hero.hp * sk.heal * lvl * (1 + b.hero.power / 100));
+    const before = b.heroHp;
+    b.heroHp = Math.min(b.hero.hp, b.heroHp + amount);
+    battleLog(`You heal ${b.heroHp - before} HP.`);
+  }
+  if (b.monsterHp <= 0) return;
+  if (sk.guard) battleLog("Ice forms around you. You are guarding this turn.");
+  if (sk.interrupt && b.charging) {
+    b.charging = false;
+    battleLog(`${m.name}'s heavy attack is broken!`);
+  }
+  if (sk.weaken) {
+    b.weakTurns = sk.weaken;
+    battleLog(`${m.name} is weakened for ${sk.weaken} turns.`);
+  }
+  if (sk.stun && Math.random() < sk.stun) {
+    b.stunned = true;
+    battleLog(`${m.name} is stunned!`);
+  }
+}
+
 function monsterTurn() {
   const b = state.battle;
   const m = monsterById[b.monsterId];
+  if (b.stunned) {
+    b.stunned = false;
+    battleLog(`${m.name} is stunned and can't move.`);
+    return;
+  }
+  const weak = b.weakTurns > 0;
+  if (weak) b.weakTurns -= 1;
   const heavy = b.charging;
   b.charging = false;
   const hit = rollHit({
@@ -536,14 +731,15 @@ function monsterTurn() {
     attackEl: m.element, targetEl: null, // armor has no element (yet)
     critChance: 0,
     dodge: dodgeChance(b.hero.agility, m.stats.agility),
-    extra: (heavy ? BATTLE.heavyMultiplier : 1) * (b.guarding ? BATTLE.guardMultiplier : 1),
+    extra: (heavy ? BATTLE.heavyMultiplier : 1) * (b.guarding ? BATTLE.guardMultiplier : 1) * (weak ? WEAKEN_MULT : 1),
   });
   const what = heavy ? "unleashes a heavy attack" : "attacks";
   if (hit.dodged) {
     battleLog(`${m.name} ${what}, but you dodge!`);
   } else {
     b.heroHp = Math.max(0, b.heroHp - hit.damage);
-    battleLog(`${m.name} ${what} for ${hit.damage}${b.guarding ? " (guarded)" : ""}.`);
+    const notes = [b.guarding && "guarded", weak && "weakened"].filter(Boolean).join(", ");
+    battleLog(`${m.name} ${what} for ${hit.damage}${notes ? ` (${notes})` : ""}.`);
   }
   if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
     b.charging = true;
@@ -633,6 +829,8 @@ let refs = {};
 
 // Which material tab the forge is showing.
 let forgeOre = "copper";
+// Which element new weapons get when you smith them (null = neutral, free).
+let forgeElement = null;
 
 function buildForge() {
   refs.recipes = {};
@@ -661,7 +859,9 @@ function buildForge() {
     if (group !== lastGroup) {
       box.appendChild(el(`<h3>${group}</h3>`));
       lastGroup = group;
+      if (group === "Weapons") box.appendChild(buildInfusePicker(ore));
     }
+    const isWeapon = r.slot === "weapon";
     const card = el(`
       <div class="card">
         <div class="row">
@@ -669,21 +869,50 @@ function buildForge() {
           <span class="small">In bag: <span class="num" data-k="owned"></span></span>
         </div>
         <div class="stats-line">${statsText(r.stats)} <span class="small">· ${r.note}</span></div>
-        <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore · sells for <span data-k="price"></span> 🪙</div>
+        <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore${isWeapon && forgeElement ? ` + ${ore.infuseCost} ${elementById[forgeElement].icon} ${elementById[forgeElement].drop}` : ""} · sells for <span data-k="price"></span> 🪙</div>
+        ${isWeapon ? `<div class="small" data-k="bagEls"></div>` : ""}
         <div class="buttons">
           <button data-k="make1">Smith 1</button>
           <button data-k="makeMax">Smith max</button>
-          <button data-k="equip">Equip</button>
+          <button data-k="equip">Equip${isWeapon && forgeElement ? ` ${elementById[forgeElement].icon}` : ""}</button>
           <button data-k="sell" class="primary">Sell all</button>
         </div>
       </div>`);
-    card.querySelector('[data-k="make1"]').onclick = () => smith(r.id, 1);
-    card.querySelector('[data-k="makeMax"]').onclick = () => smith(r.id, "max");
-    card.querySelector('[data-k="equip"]').onclick = () => equip(r.id);
+    card.querySelector('[data-k="make1"]').onclick = () => smith(r.id, 1, forgeElement);
+    card.querySelector('[data-k="makeMax"]').onclick = () => smith(r.id, "max", forgeElement);
+    card.querySelector('[data-k="equip"]').onclick = () => equip(r.id, forgeElement);
     card.querySelector('[data-k="sell"]').onclick = () => sell(r.id);
     refs.recipes[r.id] = card;
     box.appendChild(card);
   }
+}
+
+// Buttons above the weapons: pick an element to infuse new weapons with.
+function buildInfusePicker(ore) {
+  const box = el(`<div class="infuse">
+      <div class="small">Infuse new weapons with an element (costs ${ore.infuseCost} essences each). Your basic attack uses your weapon's element.</div>
+      <div class="tabs" data-k="els"></div>
+    </div>`);
+  const tabs = box.querySelector('[data-k="els"]');
+  for (const e of [null, ...ELEMENTS]) {
+    const id = e ? e.id : null;
+    const label = e ? `${e.icon} ${e.name}` : "Neutral";
+    const b = el(`<button class="tab${forgeElement === id ? " active" : ""}">${label}</button>`);
+    b.onclick = () => { forgeElement = id; buildForge(); render(); };
+    tabs.appendChild(b);
+  }
+  return box;
+}
+
+// "Neutral 1 · 🔥 2" for the weapons of one recipe in your bag.
+function bagElementsText(r) {
+  const parts = [];
+  if (state.items[r.id] > 0) parts.push(`Neutral ${fmt(state.items[r.id])}`);
+  for (const e of ELEMENTS) {
+    const n = state.items[itemKey(r.id, e.id)];
+    if (n > 0) parts.push(`${e.icon} ${fmt(n)}`);
+  }
+  return parts.length ? `Bag: ${parts.join(" · ")}` : "";
 }
 
 function buildHero() {
@@ -820,8 +1049,14 @@ function renderBattle() {
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
-  const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) =>
-    `<button class="skill" disabled title="Skills can be bought from the merchant (coming soon)">Empty skill slot ${i + 1}</button>`).join("");
+  const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) => {
+    const slot = (b.skills || [])[i];
+    const sk = slot && skillById[slot.id];
+    if (!sk) return `<button class="skill" disabled title="Buy skills from the Merchant and equip them before a fight">Empty skill slot ${i + 1}</button>`;
+    const mana = skillGrade(sk).mana;
+    return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${b.mana < mana ? "disabled" : ""}
+      title="${sk.desc}">${elementById[sk.element].icon} ${sk.name} <span class="small">Lv ${slot.level} · 💧${mana}</span></button>`;
+  }).join("");
 
   let footer;
   if (b.result) {
@@ -862,6 +1097,105 @@ function renderBattle() {
   if (close) close.onclick = closeBattle;
   const logBox = box.querySelector('[data-k="log"]');
   logBox.scrollTop = logBox.scrollHeight;
+}
+
+// ---------- Merchant ----------
+
+function buildMerchant() {
+  refs.skillSlots = [];
+  refs.skills = {};
+  const slotsBox = document.getElementById("skill-slots");
+  slotsBox.innerHTML = "";
+  for (let i = 0; i < BATTLE.skillSlots; i++) {
+    const row = el(`
+      <div class="slot">
+        <div>
+          <div class="small">Skill slot ${i + 1}</div>
+          <div class="name" data-k="skill"></div>
+          <div class="small" data-k="info"></div>
+        </div>
+        <button data-k="remove">Remove</button>
+      </div>`);
+    row.querySelector('[data-k="remove"]').onclick = () => unequipSkill(i);
+    refs.skillSlots.push(row);
+    slotsBox.appendChild(row);
+  }
+
+  const box = document.getElementById("skills");
+  box.innerHTML = "";
+  for (const e of ELEMENTS) {
+    box.appendChild(el(`<h3>${e.icon} ${e.name} skills</h3>`));
+    for (const sk of SKILLS) {
+      if (sk.element !== e.id) continue;
+      const g = skillGrade(sk);
+      const card = el(`
+        <div class="card skill-card">
+          <div class="row">
+            <span class="name">${e.icon} ${sk.name} <span class="tag" data-k="lvl" hidden></span></span>
+            <span class="small">${g.name} · 💧 ${g.mana} mana</span>
+          </div>
+          <div class="small">${sk.desc}</div>
+          <div class="stats-line" data-k="effect"></div>
+          <div class="buttons">
+            <button class="primary" data-k="buy"></button>
+            <button data-k="equip">Equip</button>
+          </div>
+        </div>`);
+      card.querySelector('[data-k="buy"]').onclick = () => buySkill(sk.id);
+      card.querySelector('[data-k="equip"]').onclick = () => equipSkill(sk.id);
+      refs.skills[sk.id] = card;
+      box.appendChild(card);
+    }
+  }
+}
+
+// What a skill does at a level, in numbers, using your current stats.
+function skillEffectText(sk, level) {
+  const hero = heroStats();
+  const lvl = skillLevelMult(Math.max(1, level));
+  const parts = [];
+  if (sk.power) {
+    const per = Math.round((hero.attack + hero.power) * sk.power * lvl);
+    parts.push(`${sk.hits ? `${sk.hits} × ` : ""}${fmt(per)} strength`);
+  }
+  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl * (1 + hero.power / 100)))} HP`);
+  return parts.join(", ");
+}
+
+function renderMerchant() {
+  state.skillSlots.forEach((id, i) => {
+    const row = refs.skillSlots[i];
+    const sk = id && skillById[id];
+    set(row, "skill", sk ? `${elementById[sk.element].icon} ${sk.name} (Lv ${skillLevel(id)})` : "Empty");
+    set(row, "info", sk ? `💧 ${skillGrade(sk).mana} mana · ${skillEffectText(sk, skillLevel(id))}` : "Buy a skill below and press Equip.");
+    row.classList.toggle("empty", !sk);
+    row.querySelector('[data-k="remove"]').hidden = !sk;
+  });
+  const slotsFull = !state.skillSlots.includes(null);
+  for (const sk of SKILLS) {
+    const card = refs.skills[sk.id];
+    const level = skillLevel(sk.id);
+    const cost = skillNextCost(sk);
+    const e = elementById[sk.element];
+    const lvlTag = card.querySelector('[data-k="lvl"]');
+    lvlTag.hidden = level === 0;
+    set(card, "lvl", `Lv ${level}`);
+    set(card, "effect", level > 0
+      ? `Now: ${skillEffectText(sk, level)}`
+      : skillEffectText(sk, 1));
+    const buy = card.querySelector('[data-k="buy"]');
+    const label = `${level > 0 ? `Level up to ${level + 1}` : "Buy"} for ${fmt(cost)} ${e.icon}`;
+    if (buy.textContent !== label) buy.textContent = label;
+    buy.disabled = state.drops[sk.element] < cost;
+    const equip = card.querySelector('[data-k="equip"]');
+    const equipped = state.skillSlots.includes(sk.id);
+    const eqLabel = equipped ? "Equipped" : "Equip";
+    if (equip.textContent !== eqLabel) equip.textContent = eqLabel;
+    equip.hidden = level === 0;
+    equip.disabled = equipped || slotsFull;
+    equip.title = !equipped && slotsFull ? "All 3 slots are full. Remove a skill first." : "";
+    card.classList.toggle("owned", level > 0);
+  }
 }
 
 function buildUI() {
@@ -906,6 +1240,7 @@ function buildUI() {
   buildForge();
   buildHero();
   buildAdventure();
+  buildMerchant();
 
   const upBox = document.getElementById("upgrades");
   upBox.innerHTML = "";
@@ -960,18 +1295,20 @@ function render() {
   for (const r of RECIPES) {
     const card = refs.recipes[r.id];
     if (!card) continue;
-    const canMake = state.ore[r.ore] >= r.cost;
-    set(card, "owned", fmt(state.items[r.id]));
+    const element = r.slot === "weapon" ? forgeElement : null;
+    const canMake = smithLimit(r, element) > 0;
+    set(card, "owned", fmt(bagCount(r)));
+    if (r.slot === "weapon") set(card, "bagEls", bagElementsText(r));
     set(card, "price", fmt(sellPrice(r)));
     card.querySelector('[data-k="make1"]').disabled = !canMake;
     card.querySelector('[data-k="makeMax"]').disabled = !canMake;
-    card.querySelector('[data-k="sell"]').disabled = state.items[r.id] <= 0;
+    card.querySelector('[data-k="sell"]').disabled = bagCount(r) <= 0;
     const worn = state.equipped[r.slot] && state.equipped[r.slot].id === r.id;
     card.querySelector('[data-k="worn"]').hidden = !worn;
-    card.querySelector('[data-k="equip"]').disabled = state.items[r.id] <= 0;
+    card.querySelector('[data-k="equip"]').disabled = state.items[itemKey(r.id, element)] <= 0;
   }
   if (refs.sellAll) {
-    refs.sellAll.disabled = !RECIPES.some(r => r.ore === forgeOre && state.items[r.id] > 0);
+    refs.sellAll.disabled = !RECIPES.some(r => r.ore === forgeOre && bagCount(r) > 0);
   }
 
   set(refs.pickaxe, "lvl", String(state.pickaxe));
@@ -986,6 +1323,7 @@ function render() {
   set(refs.smithed, "total", fmt(state.totalSmithed));
 
   renderAdventure();
+  renderMerchant();
 
   const hero = heroStats();
   for (const st of STATS) {
@@ -998,7 +1336,7 @@ function render() {
     const item = state.equipped[slot.id];
     const r = item && recipeById[item.id];
     set(row, "item", r ? `${r.icon} ${r.name}` : "Empty");
-    if (slot.id === "weapon") set(row, "element", r ? `Element: ${item.element ? elementById[item.element].name : "Neutral"}` : "");
+    if (slot.id === "weapon") set(row, "element", r ? `Element: ${item.element ? `${elementById[item.element].icon} ${elementById[item.element].name}` : "Neutral"}` : "");
     set(row, "itemStats", r ? statsText(r.stats) : "Smith something in the Forge and press Equip.");
     row.classList.toggle("empty", !r);
     row.querySelector('[data-k="remove"]').hidden = !r;
