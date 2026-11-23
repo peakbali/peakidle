@@ -2175,8 +2175,11 @@ function buildUI() {
     if (state.unlocked[o.id]) {
       const card = el(`
         <div class="card">
-          <div class="row">
+          <div class="row ore-top">
             <button class="ore-btn" title="Mine ${o.name}">${o.icon}</button>
+            ${typeof dwarfHTML === "function" ? dwarfHTML(o.id, o.name) : ""}
+          </div>
+          <div class="row">
             <div style="flex:1">
               <div class="name">${o.name} ore: <span class="num" data-k="amount"></span></div>
               <div class="small">Miners: <span data-k="miners"></span> · <span data-k="rate"></span>/sec · +<span data-k="click"></span> per click</div>
@@ -2265,6 +2268,7 @@ function render() {
     if (state.unlocked[o.id]) {
       set(card, "amount", fmt(state.ore[o.id]));
       set(card, "miners", String(state.miners[o.id]));
+      if (typeof updateDwarf === "function") updateDwarf(card.querySelector(".dwarf-box"), o.id, state.miners[o.id]);
       set(card, "rate", fmtRate(orePerSecond(o)));
       set(card, "click", fmtRate(clickAmount(o)));
       const cost = minerCost(o);
