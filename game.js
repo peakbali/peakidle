@@ -1433,20 +1433,23 @@ function buildForge() {
     }
     const isWeapon = r.slot === "weapon";
     const card = el(`
-      <div class="card">
-        <div class="row">
-          <span class="name">${r.icon} ${r.name} <span class="tag" data-k="worn" hidden>Equipped</span></span>
-          <span class="small">In bag: <span class="num" data-k="owned"></span></span>
-        </div>
-        <div class="stats-line">${statsText(r.stats)} <span class="small">· ${r.note}</span></div>
-        ${isWeapon ? `<div class="small wskill-line">Weapon skills: ${weaponSkillsOf(r.type).map(ws => `${ws.icon} ${ws.name}`).join(" · ")}</div>` : ""}
-        <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore${isWeapon && forgeElement ? ` + ${ore.infuseCost} ${elementById[forgeElement].icon} ${elementById[forgeElement].drop}` : ""} · sells for <span data-k="price"></span> 🪙</div>
-        ${isWeapon ? `<div class="small" data-k="bagEls"></div>` : ""}
-        <div class="buttons">
-          <button data-k="make1">Smith 1</button>
-          <button data-k="makeMax">Smith max</button>
-          <button data-k="equip">Equip${isWeapon && forgeElement ? ` ${elementById[forgeElement].icon}` : ""}</button>
-          <button data-k="sell" class="primary">Sell all</button>
+      <div class="card item-row">
+        <div class="item-icon" aria-hidden="true">${r.icon}</div>
+        <div class="item-main">
+          <div class="row">
+            <span class="name">${r.name} <span class="tag" data-k="worn" hidden>Equipped</span></span>
+            <span class="small">In bag <b class="num bag-num" data-k="owned"></b></span>
+          </div>
+          <div class="stats-line">${statsText(r.stats)} <span class="small">· ${r.note}</span></div>
+          ${isWeapon ? `<div class="small wskill-line">Skills: ${weaponSkillsOf(r.type).map(ws => `${ws.icon} ${ws.name}`).join(" · ")}</div>` : ""}
+          <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore${isWeapon && forgeElement ? ` + ${ore.infuseCost} ${elementById[forgeElement].icon} ${elementById[forgeElement].drop}` : ""} · sells for <span data-k="price"></span> 🪙</div>
+          ${isWeapon ? `<div class="small" data-k="bagEls"></div>` : ""}
+          <div class="buttons">
+            <button data-k="make1">Smith 1</button>
+            <button data-k="makeMax">Smith max</button>
+            <button data-k="equip">Equip${isWeapon && forgeElement ? ` ${elementById[forgeElement].icon}` : ""}</button>
+            <button data-k="sell" class="primary">Sell all</button>
+          </div>
         </div>
       </div>`);
     card.querySelector('[data-k="make1"]').onclick = () => smith(r.id, 1, forgeElement);
@@ -2139,8 +2142,8 @@ function buildSouls() {
 
 function renderSouls() {
   set(document.getElementById("souls-bar"), "souls", fmt(state.souls));
-  set(document.getElementById("souls-bar"), "lives", String(state.reincarnations));
-  set(document.getElementById("souls-bar"), "priceMult", runPriceMult().toFixed(2));
+  set(document.getElementById("settings-pop"), "lives", String(state.reincarnations));
+  set(document.getElementById("settings-pop"), "priceMult", runPriceMult().toFixed(2));
   for (const a of ATTRIBUTES) {
     const card = refs.attrs[a.id];
     const lvl = attributeLevel(a.id);
@@ -2195,7 +2198,12 @@ function buildUI() {
             <button data-k="hire">Hire miner (<span data-k="hireCost"></span> 🪙)</button>
           </div>
         </div>`);
-      card.querySelector(".ore-btn").onclick = () => mine(o.id);
+      card.querySelector(".ore-btn").onclick = e => {
+        const before = state.ore[o.id];
+        mine(o.id);
+        const got = state.ore[o.id] - before;
+        if (got > 0) floatText(e.currentTarget, `+${fmtRate(got)}`);
+      };
       card.querySelector('[data-k="hire"]').onclick = () => hireMiner(o.id);
       refs.ores[o.id] = card;
       oresBox.appendChild(card);
@@ -2244,6 +2252,31 @@ function buildUI() {
   upBox.appendChild(refs.smithed);
 
   render();
+}
+
+// A small "+5" that floats up from the ore you just clicked.
+function floatText(anchor, text) {
+  const spot = anchor.parentElement;
+  const pop = el(`<span class="float-num" aria-hidden="true">${text}</span>`);
+  pop.style.left = `${anchor.offsetLeft + anchor.offsetWidth / 2 + (Math.random() * 16 - 8)}px`;
+  pop.style.top = `${anchor.offsetTop + 4}px`;
+  spot.appendChild(pop);
+  pop.addEventListener("animationend", () => pop.remove());
+  setTimeout(() => pop.remove(), 1500); // in case animations are switched off
+}
+
+// A short glow on buy buttons the moment you can afford them.
+const wasDisabled = new WeakMap();
+function glowAffordable() {
+  for (const b of document.querySelectorAll('main button[data-k="hire"], main button[data-k="unlock"], main button[data-k="buy"]')) {
+    const before = wasDisabled.get(b);
+    if (before === true && !b.disabled) {
+      b.classList.remove("glow");
+      void b.offsetWidth; // restart the animation
+      b.classList.add("glow");
+    }
+    wasDisabled.set(b, b.disabled);
+  }
 }
 
 function set(root, key, text) {
@@ -2343,6 +2376,7 @@ function render() {
     row.classList.toggle("empty", !r);
     row.querySelector('[data-k="remove"]').hidden = !r;
   }
+  glowAffordable();
 }
 
 // ---------- Main loop ----------
@@ -2381,8 +2415,14 @@ function start() {
   window.addEventListener("beforeunload", save);
   document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
 
-  document.getElementById("reset").onclick = () => {
-    if (!confirm("Start over? This erases ALL your progress, including Souls, attributes and skills. (To start a new run and keep them, use Reincarnate instead.)")) return;
+  // Reset lives in the settings menu (gear in the top bar) and asks once more before erasing.
+  const resetConfirm = document.getElementById("reset-confirm");
+  document.getElementById("reset").onclick = () => { resetConfirm.hidden = false; };
+  document.getElementById("reset-no").onclick = () => { resetConfirm.hidden = true; };
+  document.getElementById("reset-yes").onclick = () => {
+    resetConfirm.hidden = true;
+    document.getElementById("settings-pop").hidden = true;
+    document.getElementById("settings-btn").setAttribute("aria-expanded", "false");
     reincarnateOpen = false;
     state = freshState();
     save();

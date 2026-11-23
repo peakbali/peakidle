@@ -18,9 +18,13 @@ const MENU_ITEMS = [
 const dashboardEl = document.getElementById("dashboard");
 const tabbarEl = document.getElementById("tabbar");
 
+// Pixel-art icons (icons.js) for the menu, the tab bar and the panel titles.
+// The emoji above are only a fallback in case icons.js didn't load.
+const menuIcon = it => (typeof pxIcon === "function" && pxIcon(it.id)) || it.icon;
+
 dashboardEl.innerHTML = MENU_ITEMS.map(it => `
   <button type="button" class="dash-tile" data-go="${it.id}">
-    <span class="dash-icon">${it.icon}</span>
+    <span class="dash-icon">${menuIcon(it)}</span>
     <span class="dash-name">${it.name}</span>
     <span class="dash-blurb">${it.blurb}</span>
     <span class="dash-badge" data-badge="${it.id}" hidden></span>
@@ -28,9 +32,35 @@ dashboardEl.innerHTML = MENU_ITEMS.map(it => `
 
 tabbarEl.innerHTML = MENU_ITEMS.map(it => `
   <button type="button" class="tab-item" data-go="${it.id}">
-    <span class="tab-icon">${it.icon}</span>
+    <span class="tab-icon">${menuIcon(it)}</span>
     <span class="tab-label">${it.name}</span>
   </button>`).join("");
+
+for (const it of MENU_ITEMS) {
+  const h2 = document.querySelector(`#panel-${it.id} > h2`);
+  if (h2) h2.insertAdjacentHTML("afterbegin", `<span class="h2-icon">${menuIcon(it)}</span>`);
+}
+
+// Header icons: fill every <span class="px-slot" data-icon="..."> with its pixel picture.
+if (typeof pxIcon === "function") {
+  for (const slot of document.querySelectorAll(".px-slot[data-icon]")) slot.innerHTML = pxIcon(slot.dataset.icon);
+}
+
+// Settings gear in the top bar: opens a small menu (with Reset inside it).
+const settingsBtn = document.getElementById("settings-btn");
+const settingsPop = document.getElementById("settings-pop");
+function setSettingsOpen(open) {
+  settingsPop.hidden = !open;
+  settingsBtn.setAttribute("aria-expanded", String(open));
+  if (!open) document.getElementById("reset-confirm").hidden = true;
+}
+settingsBtn.addEventListener("click", () => setSettingsOpen(settingsPop.hidden));
+document.addEventListener("click", e => {
+  if (!settingsPop.hidden && !e.target.closest(".settings")) setSettingsOpen(false);
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !settingsPop.hidden) { setSettingsOpen(false); settingsBtn.focus(); }
+});
 
 function showView(view) {
   if (view !== "menu" && !MENU_ITEMS.some(it => it.id === view)) view = "menu";

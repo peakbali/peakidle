@@ -4,16 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
-  <header>
-    <button id="menu-btn" class="menu-btn" type="button" aria-label="Back to the main menu">🏠 Menu</button>
-    <h1>⛏️ Peak Idle</h1>
-    <div class="header-right">
-      <div id="souls-bar" class="souls-bar" title="Souls are earned by reincarnating. Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do.">👻 <span data-k="souls">0</span> Souls <span class="small">· Reincarnations: <span data-k="lives">0</span> · Prices ×<span data-k="priceMult">1.00</span></span></div>
+  <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
+  <header class="hud">
+    <button id="menu-btn" class="menu-btn" type="button" aria-label="Back to the main menu"><span class="px-slot" data-icon="home"></span><span>Menu</span></button>
+    <h1 class="logo"><span class="px-slot" data-icon="mine"></span><span>Peak Idle</span></h1>
+    <div class="hud-chips" aria-label="What you have">
+      <div class="chip chip-coins" title="Coins"><span class="px-slot" data-icon="coin"></span><span id="coins" class="num">0</span></div>
+      <div id="souls-bar" class="chip chip-souls" title="Souls are earned by reincarnating. Spend them on attributes in the Souls panel."><span class="px-slot" data-icon="souls"></span><span class="num" data-k="souls">0</span></div>
       <div id="ore-bar" class="ore-bar" aria-label="Your ore"></div>
-      <div class="coins">🪙 <span id="coins">0</span> coins</div>
+    </div>
+    <div class="settings">
+      <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" aria-expanded="false" aria-controls="settings-pop"><span class="px-slot" data-icon="gear"></span></button>
+      <div id="settings-pop" class="settings-pop" hidden>
+        <h3>Your game</h3>
+        <div class="row"><span>Reincarnations</span><b class="num" data-k="lives">0</b></div>
+        <div class="row"><span>Prices</span><b class="num">×<span data-k="priceMult">1.00</span></b></div>
+        <p class="small">Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do. The game saves by itself every few seconds.</p>
+        <button id="reset" class="danger" type="button">Reset game…</button>
+        <div id="reset-confirm" class="confirm" hidden>
+          <div class="name">Erase everything?</div>
+          <div class="small">This deletes ALL your progress, including Souls, attributes and skills. To start a new run and keep them, use Reincarnate in the Souls panel instead.</div>
+          <div class="buttons">
+            <button id="reset-yes" class="danger" type="button">Yes, erase it all</button>
+            <button id="reset-no" type="button">No, keep playing</button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -24,14 +44,14 @@
     <!-- Mining: click to mine, hire miners to mine for you -->
     <section class="panel" id="panel-mine" data-panel="mine">
       <h2>Mine</h2>
-      <p class="hint">Click an ore to mine it. Hire miners to mine while you're away.</p>
+      <details class="hint"><summary>How it works</summary><p>Click an ore to mine it. Hire miners to mine while you're away.</p></details>
       <div id="ores"></div>
     </section>
 
     <!-- Smithing: turn ore into weapons and armor -->
     <section class="panel" id="panel-forge" data-panel="forge">
       <h2>Forge</h2>
-      <p class="hint">Turn ore into weapons and armor. Sell them for coins, or equip them to make your hero stronger. Sold gear is gone for good.</p>
+      <details class="hint"><summary>How it works</summary><p>Turn ore into weapons and armor. Sell them for coins, or equip them to make your hero stronger. Sold gear is gone for good.</p></details>
       <div id="forge-tabs" class="tabs"></div>
       <div id="recipes"></div>
     </section>
@@ -39,7 +59,7 @@
     <!-- Hero: stats and the gear you're wearing -->
     <section class="panel" id="panel-hero" data-panel="hero">
       <h2>Hero</h2>
-      <p class="hint">Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility. Each weapon type comes with 2 weapon skills for battle.</p>
+      <details class="hint"><summary>How it works</summary><p>Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility. Each weapon type comes with 2 weapon skills for battle.</p></details>
       <div id="hero-stats" class="hero-stats"></div>
       <h3>Equipment</h3>
       <div id="hero-slots"></div>
@@ -48,7 +68,7 @@
     <!-- Adventure: fight monsters for essences and coins -->
     <section class="panel" id="panel-adventure" data-panel="adventure">
       <h2>Adventure</h2>
-      <p class="hint">A random monster appears every 15 seconds (up to 5 at once), even while the game is closed. Beat the boss to raise the danger level and meet stronger monsters. Losing or running away costs nothing.</p>
+      <details class="hint"><summary>How it works</summary><p>A random monster appears every 15 seconds (up to 5 at once), even while the game is closed. Beat the boss to raise the danger level and meet stronger monsters. Losing or running away costs nothing.</p></details>
       <h3>Essences</h3>
       <div id="drops" class="drops"></div>
       <div id="areas"></div>
@@ -57,7 +77,7 @@
     <!-- Skills: skills bought and levelled up with essences -->
     <section class="panel" id="panel-merchant" data-panel="merchant">
       <h2>Skills</h2>
-      <p class="hint">Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level). Skill power adds to your attack for skills. Your weapon also gives you 2 free weapon skills (listed at the bottom).</p>
+      <details class="hint"><summary>How it works</summary><p>Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level). Skill power adds to your attack for skills. Your weapon also gives you 2 free weapon skills (listed at the bottom).</p></details>
       <h3>Your skill slots</h3>
       <div id="skill-slots"></div>
       <div id="skills"></div>
@@ -71,7 +91,7 @@
     <!-- Souls: reincarnate for Souls, spend them on permanent attributes -->
     <section class="panel" id="panel-souls" data-panel="souls">
       <h2>Souls</h2>
-      <p class="hint">Reincarnate to start a new run and earn 👻 Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again.</p>
+      <details class="hint"><summary>How it works</summary><p>Reincarnate to start a new run and earn 👻 Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again.</p></details>
       <h3>Attributes</h3>
       <div id="attributes"></div>
       <h3>Reincarnation</h3>
@@ -84,16 +104,16 @@
   <nav id="tabbar" class="tabbar" aria-label="Panels"></nav>
 
   <footer>
-    <div id="log"></div>
-    <button id="reset" class="danger">Reset game</button>
+    <div id="log" role="status"></div>
   </footer>
 
   <!-- Battle screen: takes over the whole screen while you fight (filled in by game.js) -->
   <div id="battle" class="battle-screen" role="dialog" aria-modal="true" aria-label="Battle" hidden></div>
 
-  <script src="ores-art.js?v=17"></script>
-  <script src="dwarves.js?v=17"></script>
-  <script src="game.js?v=17"></script>
-  <script src="menu.js?v=17"></script>
+  <script src="icons.js?v=18"></script>
+  <script src="ores-art.js?v=18"></script>
+  <script src="dwarves.js?v=18"></script>
+  <script src="game.js?v=18"></script>
+  <script src="menu.js?v=18"></script>
 </body>
 </html>

@@ -37,5 +37,7 @@ Your progress saves automatically in your browser.
 - `dwarves.js`: the little animated dwarf miners in the Mine panel, one per ore, drawn in code as pixel art. Their looks, tools and mining moves are at the top, easy to tweak.
 - `ores-art.js`: the pixel-art ore pictures (Mine buttons, header, Forge tabs), drawn in code. Each ore has its own little drawing near the bottom of the file.
 - `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
+- `icons.js`: the pixel-art icons for the menu, tab bar, panel titles and top bar (pickaxe, anvil, shield, swords, scroll, arrow, ghost, coin, gear, house), drawn in code from little text maps.
+- `fonts/`: the Jersey 15 pixel font used for titles and numbers (free, SIL Open Font License in `fonts/OFL.txt`).
 
-When you change `style.css`, `game.js` or `menu.js`, raise the `?v=` number after their names in `index.html` (for example `?v=10` to `?v=11`). That makes phones and browsers load the new files instead of an old saved copy.
+When you change `style.css`, `game.js`, `menu.js` or `icons.js`, raise the `?v=` number after their names in `index.html` (for example `?v=10` to `?v=11`). That makes phones and browsers load the new files instead of an old saved copy.
