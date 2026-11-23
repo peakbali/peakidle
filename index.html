@@ -37,6 +37,15 @@
       <div id="hero-slots"></div>
     </section>
 
+    <!-- Adventure: fight monsters for essences and coins -->
+    <section class="panel">
+      <h2>Adventure</h2>
+      <p class="hint">Fight monsters one by one. Beat a monster to unlock the next. Each monster rests 15 minutes after a fight. Losing costs nothing.</p>
+      <h3>Essences</h3>
+      <div id="drops" class="drops"></div>
+      <div id="areas"></div>
+    </section>
+
     <!-- Upgrades bought with coins -->
     <section class="panel">
       <h2>Upgrades</h2>
@@ -48,6 +57,11 @@
     <div id="log"></div>
     <button id="reset" class="danger">Reset game</button>
   </footer>
+
+  <!-- Battle window, shown while you fight -->
+  <div id="battle" class="battle-overlay" hidden>
+    <div class="battle-box" role="dialog" aria-modal="true" aria-labelledby="battle-title"></div>
+  </div>
 
   <script src="game.js"></script>
 </body>

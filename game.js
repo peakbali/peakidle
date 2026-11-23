@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 2;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 3;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -19,14 +19,16 @@ const ORES = [
 ];
 
 // The hero's stats. "power" boosts skills (skills arrive in a later update).
+// Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes later.
 const STATS = [
   { id: "hp",      name: "HP",          icon: "❤️" },
   { id: "attack",  name: "Attack",      icon: "⚔️" },
   { id: "defense", name: "Defense",     icon: "🛡️" },
   { id: "agility", name: "Agility",     icon: "💨" },
   { id: "power",   name: "Skill power", icon: "✨" },
+  { id: "luck",    name: "Luck",        icon: "🍀" },
 ];
-const HERO_BASE_STATS = { hp: 50, attack: 2, defense: 0, agility: 5, power: 0 };
+const HERO_BASE_STATS = { hp: 50, attack: 2, defense: 0, agility: 5, power: 0, luck: 0 };
 
 // Where gear can be worn. One item per slot.
 const SLOTS = [
@@ -93,6 +95,113 @@ const slotById = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
 const MINER_COST_GROWTH = 1.15; // each extra miner costs 15% more
 
+// ---------- Elements ----------
+
+// Each element beats the next one in a loop:
+// Fire beats Ice, Ice beats Wind, Wind beats Earth, Earth beats Lightning, Lightning beats Fire.
+// Every element also has its own drop, which monsters of that element leave behind.
+const ELEMENTS = [
+  { id: "fire",      name: "Fire",      icon: "🔥", beats: "ice",       drop: "Fire Essence" },
+  { id: "ice",       name: "Ice",       icon: "❄️", beats: "wind",      drop: "Ice Essence" },
+  { id: "wind",      name: "Wind",      icon: "🌪️", beats: "earth",     drop: "Wind Essence" },
+  { id: "earth",     name: "Earth",     icon: "🪨", beats: "lightning", drop: "Earth Essence" },
+  { id: "lightning", name: "Lightning", icon: "⚡", beats: "fire",      drop: "Lightning Essence" },
+];
+const elementById = Object.fromEntries(ELEMENTS.map(e => [e.id, e]));
+const WEAK_HIT = 1.5;   // hitting a monster's weakness does 50% more damage
+const RESISTED_HIT = 0.5; // hitting an element it is strong against does half damage
+
+// A monster is weak to the element that beats it, and strong against the element it beats.
+function weaknessOf(elementId) { return ELEMENTS.find(e => e.beats === elementId).id; }
+function strengthOf(elementId) { return elementById[elementId].beats; }
+
+// Damage multiplier when an attack of `attackEl` (or null = neutral) hits a target of `targetEl`.
+function elementMultiplier(attackEl, targetEl) {
+  if (!attackEl || !targetEl) return 1;
+  if (elementById[attackEl].beats === targetEl) return WEAK_HIT;
+  if (elementById[targetEl].beats === attackEl) return RESISTED_HIT;
+  return 1;
+}
+
+// ---------- Monsters ----------
+
+// A ladder of areas from easy to hard. Beating a monster unlocks the next one,
+// and the last monster of each area is its boss.
+const AREAS = [
+  { id: "tunnels", name: "Mossy Tunnels", icon: "🌿", monsters: [
+    { id: "cinder_rat",    name: "Cinder Rat",    icon: "🐀", element: "fire" },
+    { id: "frost_beetle",  name: "Frost Beetle",  icon: "🪲", element: "ice" },
+    { id: "spark_bat",     name: "Spark Bat",     icon: "🦇", element: "lightning" },
+    { id: "mud_slime",     name: "Mud Slime",     icon: "🟤", element: "earth" },
+    { id: "howling_wolf",  name: "Howling Wolf",  icon: "🐺", element: "wind", boss: true },
+  ]},
+  { id: "deep_mine", name: "Deep Mine", icon: "🕳️", monsters: [
+    { id: "cave_gust",     name: "Cave Gust",     icon: "💨", element: "wind" },
+    { id: "stone_golem",   name: "Stone Golem",   icon: "🗿", element: "earth" },
+    { id: "ember_imp",     name: "Ember Imp",     icon: "👺", element: "fire" },
+    { id: "volt_eel",      name: "Volt Eel",      icon: "🐍", element: "lightning" },
+    { id: "glacier_troll", name: "Glacier Troll", icon: "🧌", element: "ice", boss: true },
+  ]},
+  { id: "molten_halls", name: "Molten Halls", icon: "🌋", monsters: [
+    { id: "ash_hound",      name: "Ash Hound",      icon: "🐕", element: "fire" },
+    { id: "thunder_hawk",   name: "Thunder Hawk",   icon: "🦅", element: "lightning" },
+    { id: "crystal_spider", name: "Crystal Spider", icon: "🕷️", element: "ice" },
+    { id: "storm_harpy",    name: "Storm Harpy",    icon: "🪶", element: "wind" },
+    { id: "magma_wyrm",     name: "Magma Wyrm",     icon: "🐉", element: "fire", boss: true },
+  ]},
+  { id: "sky_peak", name: "Sky Peak", icon: "🏔️", monsters: [
+    { id: "frost_giant",    name: "Frost Giant",    icon: "🥶", element: "ice" },
+    { id: "quake_behemoth", name: "Quake Behemoth", icon: "🦏", element: "earth" },
+    { id: "tempest_djinn",  name: "Tempest Djinn",  icon: "🧞", element: "wind" },
+    { id: "storm_titan",    name: "Storm Titan",    icon: "⛈️", element: "lightning" },
+    { id: "peak_dragon",    name: "Elder Peak Dragon", icon: "🐲", element: "earth", boss: true },
+  ]},
+];
+
+// Monster stats grow exponentially along the ladder: stat = start * growth ^ (position in ladder).
+const MONSTER_SCALING = {
+  hp:      { start: 30,  growth: 1.17 },
+  attack:  { start: 4,   growth: 1.17 },
+  defense: { start: 1.5, growth: 1.18 },
+  agility: { start: 4,   growth: 1.12 },
+  coins:   { start: 10,  growth: 1.4 }, // coins for a win
+  drops:   { start: 1,   growth: 1.2 },  // element drops for a win
+};
+const BOSS_MULT = { hp: 1.6, attack: 1.15, defense: 1.15, agility: 1.1, coins: 3, drops: 3 };
+const MONSTER_COOLDOWN_MS = 15 * 60 * 1000; // each monster rests 15 minutes after a fight
+
+// Battle rules
+const BATTLE = {
+  startMana: 3,
+  manaPerTurn: 1,
+  maxMana: 5,
+  skillSlots: 3,          // skills arrive with the merchant (step 3)
+  critMultiplier: 2,      // a critical hit does double damage; crit chance = luck %
+  heavyEvery: 3,          // monsters wind up a heavy attack every 3rd turn
+  heavyMultiplier: 1.8,
+  guardMultiplier: 0.4,   // guarding takes only 40% damage
+};
+
+const MONSTERS = [];
+AREAS.forEach(area => area.monsters.forEach(m => {
+  const n = MONSTERS.length;
+  const stat = key => MONSTER_SCALING[key].start * Math.pow(MONSTER_SCALING[key].growth, n) * (m.boss ? BOSS_MULT[key] : 1);
+  MONSTERS.push({
+    ...m,
+    area: area.id,
+    index: n,
+    stats: {
+      hp: Math.round(stat("hp")),
+      attack: Math.round(stat("attack")),
+      defense: Math.round(stat("defense")),
+      agility: Math.round(stat("agility")),
+    },
+    reward: { coins: Math.round(stat("coins")), drops: Math.round(stat("drops")) },
+  });
+}));
+const monsterById = Object.fromEntries(MONSTERS.map(m => [m.id, m]));
+const areaById = Object.fromEntries(AREAS.map(a => [a.id, a]));
+
 // ---------- State ----------
 
 function freshState() {
@@ -105,8 +214,14 @@ function freshState() {
     ore: {}, miners: {}, unlocked: {},
     items: {},            // smithed gear in your bag: recipe id -> how many
     equipped: {},         // slot id -> { id: recipe id, element } or null
+    drops: {},            // element id -> how many essences you have
+    beaten: {},           // monster id -> how many times you've won against it
+    cooldowns: {},        // monster id -> time (ms) when it can be fought again
+    skillSlots: [null, null, null], // equipped skills (step 3)
+    battle: null,         // the fight in progress, saved so a reload can't skip it
     lastSaved: Date.now(),
   };
+  for (const e of ELEMENTS) s.drops[e.id] = 0;
   for (const o of ORES) {
     s.ore[o.id] = 0;
     s.miners[o.id] = 0;
@@ -129,7 +244,11 @@ function migrate(saved) {
     saved.items = items;
     saved.version = 2;
   }
-  // Later versions add their steps here (monsters, skills, reincarnation...).
+  if (saved.version < 3) {
+    // v2 -> v3: monsters, battles and drops. New fields start empty (freshState fills them in).
+    saved.version = 3;
+  }
+  // Later versions add their steps here (skills, reincarnation...).
   return saved;
 }
 
@@ -145,7 +264,7 @@ function load() {
     for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
-    for (const key of ["ore", "miners", "unlocked", "items"]) {
+    for (const key of ["ore", "miners", "unlocked", "items", "drops"]) {
       for (const [k, v] of Object.entries(saved[key] || {})) {
         if (k in s[key]) s[key][k] = v;
       }
@@ -155,6 +274,10 @@ function load() {
       const r = item && recipeById[item.id];
       if (r && r.slot === slot.id) s.equipped[slot.id] = { id: r.id, element: item.element || null };
     }
+    for (const k of ["beaten", "cooldowns"]) {
+      for (const [id, v] of Object.entries(saved[k] || {})) if (monsterById[id]) s[k][id] = v;
+    }
+    if (saved.battle && monsterById[saved.battle.monsterId]) s.battle = saved.battle;
   } catch (e) {
     console.warn("Could not load save", e);
   }
@@ -207,6 +330,47 @@ function statsText(stats) {
 
 function addOre(dt) {
   for (const o of ORES) state.ore[o.id] += orePerSecond(o) * dt;
+}
+
+// ---------- Monster rules ----------
+
+// A monster can be fought once the one before it in the ladder has been beaten.
+function monsterUnlocked(m) {
+  return m.index === 0 || (state.beaten[MONSTERS[m.index - 1].id] || 0) > 0;
+}
+function areaUnlocked(area) { return monsterUnlocked(monsterById[area.monsters[0].id]); }
+function cooldownLeft(m) { return Math.max(0, (state.cooldowns[m.id] || 0) - Date.now()); }
+function canFight(m) { return !state.battle && monsterUnlocked(m) && cooldownLeft(m) === 0; }
+
+// The element your basic attack uses: the equipped weapon's (null = neutral, until enchanting arrives).
+function weaponElement() {
+  const w = state.equipped.weapon;
+  return (w && w.element) || null;
+}
+
+// Damage from one hit. Scales the same at every level, so exponential stats stay fair:
+// equal attack and defense take off half; much more defense takes off much more.
+function baseDamage(attack, defense) {
+  if (attack <= 0) return 0;
+  return attack * attack / (attack + Math.max(0, defense));
+}
+
+// Chance to dodge: 5% when equally quick, more when you're quicker, never above 30%.
+function dodgeChance(defenderAgility, attackerAgility) {
+  const d = defenderAgility, a = attackerAgility;
+  if (d + a <= 0) return 0.05;
+  return Math.min(0.3, Math.max(0, 0.05 + 0.25 * (d - a) / (d + a)));
+}
+
+// Work out one attack. Returns { damage, dodged, crit, mult } and doesn't change anything.
+function rollHit({ attack, defense, attackEl, targetEl, critChance, dodge, extra = 1 }) {
+  if (Math.random() < dodge) return { damage: 0, dodged: true, crit: false, mult: 1 };
+  const mult = elementMultiplier(attackEl, targetEl);
+  const crit = Math.random() < critChance;
+  const spread = 0.9 + Math.random() * 0.2; // ±10% so fights aren't identical
+  let damage = baseDamage(attack, defense) * mult * spread * extra * (crit ? BATTLE.critMultiplier : 1);
+  damage = Math.max(1, Math.round(damage));
+  return { damage, dodged: false, crit, mult };
 }
 
 // ---------- Actions ----------
@@ -280,6 +444,145 @@ function unequip(slotId) {
   if (!item) return;
   state.items[item.id] += 1;
   state.equipped[slotId] = null;
+  render();
+}
+
+// ---------- Battle ----------
+// A battle is plain data in state.battle, so it's saved and survives a page reload.
+// Your stats are locked in when the fight starts.
+
+function startBattle(monsterId) {
+  const m = monsterById[monsterId];
+  if (!m || !canFight(m)) return;
+  const hero = heroStats();
+  state.battle = {
+    monsterId: m.id,
+    hero: { ...hero, element: weaponElement() },
+    heroHp: hero.hp,
+    monsterHp: m.stats.hp,
+    mana: BATTLE.startMana,
+    turn: 1,
+    guarding: false,
+    charging: false,   // the monster is winding up a heavy attack
+    log: [`A wild ${m.name} appears!`],
+    result: null,      // "win", "lose" or "fled" once it's over
+  };
+  // Quicker monsters strike first.
+  if (m.stats.agility > hero.agility) {
+    state.battle.log.push(`${m.name} is quicker and strikes first!`);
+    monsterTurn();
+  }
+  save();
+  openBattle();
+}
+
+function battleLog(msg) {
+  const b = state.battle;
+  b.log.push(msg);
+  if (b.log.length > 60) b.log.shift();
+}
+
+// Everything you can do on your turn goes through here, so skills can plug in later.
+function battleAction(action) {
+  const b = state.battle;
+  if (!b || b.result) return;
+  const m = monsterById[b.monsterId];
+
+  if (action === "attack") {
+    const hit = rollHit({
+      attack: b.hero.attack, defense: m.stats.defense,
+      attackEl: b.hero.element, targetEl: m.element,
+      critChance: b.hero.luck / 100,
+      dodge: dodgeChance(m.stats.agility, b.hero.agility),
+    });
+    if (hit.dodged) {
+      battleLog(`You attack, but ${m.name} dodges!`);
+    } else {
+      b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
+      let msg = `You hit ${m.name} for ${hit.damage}.`;
+      if (hit.crit) msg += " Critical hit!";
+      if (hit.mult > 1) msg += " It's weak to that!";
+      if (hit.mult < 1) msg += " It resists that.";
+      battleLog(msg);
+    }
+  } else if (action === "guard") {
+    b.guarding = true;
+    battleLog("You raise your guard.");
+  } else if (action === "flee") {
+    battleLog("You run away. No harm done.");
+    return endBattle("fled");
+  } else {
+    return; // unknown action (skills come later)
+  }
+
+  if (b.monsterHp <= 0) return endBattle("win");
+  monsterTurn();
+  if (b.heroHp <= 0) return endBattle("lose");
+
+  b.turn += 1;
+  b.guarding = false;
+  b.mana = Math.min(BATTLE.maxMana, b.mana + BATTLE.manaPerTurn);
+  save();
+  renderBattle();
+}
+
+function monsterTurn() {
+  const b = state.battle;
+  const m = monsterById[b.monsterId];
+  const heavy = b.charging;
+  b.charging = false;
+  const hit = rollHit({
+    attack: m.stats.attack, defense: b.hero.defense,
+    attackEl: m.element, targetEl: null, // armor has no element (yet)
+    critChance: 0,
+    dodge: dodgeChance(b.hero.agility, m.stats.agility),
+    extra: (heavy ? BATTLE.heavyMultiplier : 1) * (b.guarding ? BATTLE.guardMultiplier : 1),
+  });
+  const what = heavy ? "unleashes a heavy attack" : "attacks";
+  if (hit.dodged) {
+    battleLog(`${m.name} ${what}, but you dodge!`);
+  } else {
+    b.heroHp = Math.max(0, b.heroHp - hit.damage);
+    battleLog(`${m.name} ${what} for ${hit.damage}${b.guarding ? " (guarded)" : ""}.`);
+  }
+  if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
+    b.charging = true;
+    battleLog(`${m.name} is winding up a heavy attack! Guard to soften it.`);
+  }
+}
+
+function endBattle(result) {
+  const b = state.battle;
+  const m = monsterById[b.monsterId];
+  b.result = result;
+  state.cooldowns[m.id] = Date.now() + MONSTER_COOLDOWN_MS;
+  if (result === "win") {
+    const firstWin = !state.beaten[m.id];
+    state.beaten[m.id] = (state.beaten[m.id] || 0) + 1;
+    state.drops[m.element] += m.reward.drops;
+    state.coins += m.reward.coins;
+    const e = elementById[m.element];
+    battleLog(`You win! You get ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`);
+    const next = MONSTERS[m.index + 1];
+    if (firstWin && next) {
+      battleLog(next.area !== m.area
+        ? `A new area opens: ${areaById[next.area].name}!`
+        : `${next.name} can now be fought.`);
+    }
+  } else if (result === "lose") {
+    battleLog(`${m.name} knocks you out. You wake up back at camp, nothing lost.`);
+  }
+  save();
+  renderBattle();
+  buildAdventure();
+  render();
+}
+
+function closeBattle() {
+  if (state.battle && !state.battle.result) return; // finish or run away first
+  state.battle = null;
+  save();
+  document.getElementById("battle").hidden = true;
   render();
 }
 
@@ -407,6 +710,7 @@ function buildHero() {
           <div class="small">${slot.name}</div>
           <div class="name" data-k="item"></div>
           <div class="small" data-k="itemStats"></div>
+          ${slot.id === "weapon" ? `<div class="small" data-k="element"></div>` : ""}
         </div>
         <button data-k="remove">Unequip</button>
       </div>`);
@@ -414,6 +718,150 @@ function buildHero() {
     refs.slots[slot.id] = row;
     slotsBox.appendChild(row);
   }
+}
+
+function elementTag(elementId) {
+  if (!elementId) return `<span class="el el-none">Neutral</span>`;
+  const e = elementById[elementId];
+  return `<span class="el el-${e.id}">${e.icon} ${e.name}</span>`;
+}
+
+function fmtTime(ms) {
+  const s = Math.ceil(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function buildAdventure() {
+  refs.monsters = {};
+  refs.drops = {};
+
+  const dropsBox = document.getElementById("drops");
+  dropsBox.innerHTML = "";
+  for (const e of ELEMENTS) {
+    const chip = el(`<div class="drop el-${e.id}" title="${e.drop}: dropped by ${e.name} monsters">${e.icon} <span class="num" data-k="n"></span> <span class="small">${e.drop}</span></div>`);
+    refs.drops[e.id] = chip;
+    dropsBox.appendChild(chip);
+  }
+
+  const box = document.getElementById("areas");
+  box.innerHTML = "";
+  for (const area of AREAS) {
+    if (!areaUnlocked(area)) {
+      const prevBoss = MONSTERS[monsterById[area.monsters[0].id].index - 1];
+      box.appendChild(el(`<div class="card locked"><span class="name">${area.icon} ${area.name} (locked)</span>
+        <div class="small">Beat ${prevBoss.icon} ${prevBoss.name} to open it.</div></div>`));
+      break; // keep later areas a surprise
+    }
+    box.appendChild(el(`<h3>${area.icon} ${area.name}</h3>`));
+    for (const am of area.monsters) {
+      const m = monsterById[am.id];
+      if (!monsterUnlocked(m)) {
+        box.appendChild(el(`<div class="card locked small">❔ Beat ${MONSTERS[m.index - 1].name} to find the next monster.</div>`));
+        break;
+      }
+      const e = elementById[m.element];
+      const weak = elementById[weaknessOf(m.element)];
+      const strong = elementById[strengthOf(m.element)];
+      const card = el(`
+        <div class="card monster${m.boss ? " boss" : ""}">
+          <div class="row">
+            <span class="name">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""} <span class="tag" data-k="won" hidden></span></span>
+            ${elementTag(m.element)}
+          </div>
+          <div class="small">Weak to ${weak.icon} ${weak.name} · resists ${strong.icon} ${strong.name}</div>
+          <div class="small">❤️ ${fmt(m.stats.hp)} · ⚔️ ${fmt(m.stats.attack)} · 🛡️ ${fmt(m.stats.defense)} · 💨 ${fmt(m.stats.agility)}</div>
+          <div class="small">Win: ${m.reward.drops} ${e.icon} ${e.drop} + ${fmt(m.reward.coins)} 🪙</div>
+          <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
+        </div>`);
+      card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.id);
+      refs.monsters[m.id] = card;
+      box.appendChild(card);
+    }
+  }
+}
+
+function renderAdventure() {
+  for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmt(state.drops[e.id]));
+  for (const [id, card] of Object.entries(refs.monsters)) {
+    const m = monsterById[id];
+    const left = cooldownLeft(m);
+    const btn = card.querySelector('[data-k="fight"]');
+    const label = left > 0 ? `Resting ${fmtTime(left)}` : state.battle ? "In a fight" : "Fight";
+    if (btn.textContent !== label) btn.textContent = label;
+    btn.disabled = !canFight(m);
+    const wins = state.beaten[m.id] || 0;
+    const won = card.querySelector('[data-k="won"]');
+    won.hidden = wins === 0;
+    set(card, "won", `Beaten ×${wins}`);
+  }
+}
+
+function hpBar(now, max) {
+  const pct = Math.max(0, Math.min(100, (now / max) * 100));
+  return `<div class="hpbar"><div class="hpfill${pct < 30 ? " low" : ""}" style="width:${pct}%"></div></div>
+    <div class="small num">${fmt(now)} / ${fmt(max)} HP</div>`;
+}
+
+function openBattle() {
+  document.getElementById("battle").hidden = false;
+  renderBattle();
+  render();
+}
+
+// Redraws the battle window. Only called when something happens, not every frame.
+function renderBattle() {
+  const b = state.battle;
+  const overlay = document.getElementById("battle");
+  if (!b) { overlay.hidden = true; return; }
+  const m = monsterById[b.monsterId];
+  const area = areaById[m.area];
+  const box = overlay.querySelector(".battle-box");
+
+  const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
+    `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
+  const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) =>
+    `<button class="skill" disabled title="Skills can be bought from the merchant (coming soon)">Empty skill slot ${i + 1}</button>`).join("");
+
+  let footer;
+  if (b.result) {
+    const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
+    footer = `<div class="result ${b.result}">${titles[b.result]}</div>
+      <div class="small">${m.name} rests for 15 minutes before you can fight it again.</div>
+      <div class="buttons"><button class="primary" data-k="close">Back to the game</button></div>`;
+  } else {
+    footer = `
+      <div class="actions">
+        <button class="primary" data-a="attack">⚔️ Attack ${elementTag(b.hero.element)}</button>
+        <button data-a="guard" title="Take much less damage this turn">🛡️ Guard</button>
+        ${skills}
+        <button class="danger" data-a="flee">🏃 Run away</button>
+      </div>`;
+  }
+
+  box.innerHTML = `
+    <div class="small">${area.icon} ${area.name} · Turn ${b.turn}</div>
+    <h2 id="battle-title">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}</h2>
+    <div class="fighters">
+      <div class="fighter">
+        <div class="row"><span class="name">🧝 You</span>${elementTag(b.hero.element)}</div>
+        ${hpBar(b.heroHp, b.hero.hp)}
+        <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
+      </div>
+      <div class="fighter">
+        <div class="row"><span class="name">${m.icon} ${m.name}</span>${elementTag(m.element)}</div>
+        ${hpBar(b.monsterHp, m.stats.hp)}
+        <div class="small">${b.charging && !b.result ? "⚠️ Winding up a heavy attack!" : "&nbsp;"}</div>
+      </div>
+    </div>
+    <div class="battle-log" data-k="log">${b.log.map(l => `<div>${l}</div>`).join("")}</div>
+    ${footer}`;
+
+  box.querySelectorAll("[data-a]").forEach(btn => { btn.onclick = () => battleAction(btn.dataset.a); });
+  const close = box.querySelector('[data-k="close"]');
+  if (close) close.onclick = closeBattle;
+  const logBox = box.querySelector('[data-k="log"]');
+  logBox.scrollTop = logBox.scrollHeight;
 }
 
 function buildUI() {
@@ -457,6 +905,7 @@ function buildUI() {
 
   buildForge();
   buildHero();
+  buildAdventure();
 
   const upBox = document.getElementById("upgrades");
   upBox.innerHTML = "";
@@ -536,6 +985,8 @@ function render() {
 
   set(refs.smithed, "total", fmt(state.totalSmithed));
 
+  renderAdventure();
+
   const hero = heroStats();
   for (const st of STATS) {
     const bonus = hero[st.id] - HERO_BASE_STATS[st.id];
@@ -547,6 +998,7 @@ function render() {
     const item = state.equipped[slot.id];
     const r = item && recipeById[item.id];
     set(row, "item", r ? `${r.icon} ${r.name}` : "Empty");
+    if (slot.id === "weapon") set(row, "element", r ? `Element: ${item.element ? elementById[item.element].name : "Neutral"}` : "");
     set(row, "itemStats", r ? statsText(r.stats) : "Smith something in the Forge and press Equip.");
     row.classList.toggle("empty", !r);
     row.querySelector('[data-k="remove"]').hidden = !r;
@@ -568,6 +1020,7 @@ function start() {
   }
 
   buildUI();
+  if (state.battle) openBattle(); // pick up a fight that was going on when the page closed
 
   let last = performance.now();
   setInterval(() => {
@@ -585,8 +1038,9 @@ function start() {
     if (!confirm("Start over? This erases all your progress.")) return;
     state = freshState();
     save();
+    renderBattle();
     buildUI();
   };
 }
 
-start();
+if (typeof document !== "undefined") start();
