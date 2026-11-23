@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 6;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 7;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -30,7 +30,7 @@ const STATS = [
   { id: "power",   name: "Skill power", icon: "✨" },
   { id: "luck",    name: "Luck",        icon: "🍀" },
 ];
-const HERO_BASE_STATS = { hp: 50, attack: 2, defense: 0, agility: 5, power: 0, luck: 0 };
+const HERO_BASE_STATS = { hp: 100, attack: 2, defense: 0, agility: 5, power: 0, luck: 0 };
 
 // Where gear can be worn. One item per slot.
 const SLOTS = [
@@ -53,11 +53,11 @@ const GEAR_TYPES = [
   { id: "bow",        name: "Bow",        slot: "weapon",     icon: "🏹", cost: 10, stats: { attack: 4, agility: 4 },  note: "Quick and light" },
   { id: "staff",      name: "Staff",      slot: "weapon",     icon: "🪄", cost: 10, stats: { attack: 2, power: 6 },    note: "Boosts skills" },
   // Armor: heavy pieces give more defense, light pieces give more agility
-  { id: "helmet",     name: "Helmet",     slot: "helmet",     icon: "🪖", cost: 15, stats: { defense: 2, hp: 5 },      note: "Medium" },
-  { id: "chestplate", name: "Chestplate", slot: "chestplate", icon: "🥋", cost: 30, stats: { defense: 5, hp: 15 },     note: "Heavy" },
+  { id: "helmet",     name: "Helmet",     slot: "helmet",     icon: "🪖", cost: 15, stats: { defense: 2, hp: 10 },     note: "Medium" },
+  { id: "chestplate", name: "Chestplate", slot: "chestplate", icon: "🥋", cost: 30, stats: { defense: 5, hp: 30 },     note: "Heavy" },
   { id: "gloves",     name: "Gloves",     slot: "gloves",     icon: "🧤", cost: 10, stats: { defense: 1, attack: 1, agility: 2 }, note: "Light" },
   { id: "boots",      name: "Boots",      slot: "boots",      icon: "🥾", cost: 12, stats: { defense: 1, agility: 3 }, note: "Light" },
-  { id: "shield",     name: "Shield",     slot: "shield",     icon: "🛡️", cost: 20, stats: { defense: 4, hp: 10 },     note: "Heavy" },
+  { id: "shield",     name: "Shield",     slot: "shield",     icon: "🛡️", cost: 20, stats: { defense: 4, hp: 20 },     note: "Heavy" },
 ];
 
 // All recipes, built from every ore x every gear type (e.g. "iron_bow").
@@ -115,7 +115,7 @@ const REINCARNATION = {
 // The Soul price of the next point = baseCost x growth ^ (points you already have), rounded up.
 const ATTRIBUTE_MAX = 99;
 const ATTRIBUTES = [
-  { id: "hp",      perPoint: 10, baseCost: 1, growth: 1.15, desc: "+10 max HP per point" },
+  { id: "hp",      perPoint: 20, baseCost: 1, growth: 1.15, desc: "+20 max HP per point" },
   { id: "attack",  perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 attack per point" },
   { id: "defense", perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 defense per point" },
   { id: "agility", perPoint: 1,  baseCost: 1, growth: 1.15, desc: "+1 agility per point (dodge more, strike first)" },
@@ -170,37 +170,58 @@ const SKILL_LEVEL_COST_GROWTH = 1.7;
 // What a skill can do (any mix):
 //   power:    damage = (attack + skill power) x power. Skills never miss and can crit.
 //   hits:     how many times it strikes (default 1)
+//   status:   a status effect it can cause (see STATUS), with `chance` (0-1) per hit
 //   heal:     heals this share of your max HP (also grows with skill power)
+//   cleanse:  also cures your own status effects
 //   guard:    you guard this turn as well
-//   stun:     chance (0-1) the monster loses its next turn
 //   interrupt: cancels a heavy attack the monster is winding up
-//   weaken:   monster deals 35% less damage for this many turns
 //   critBonus: extra crit chance for this skill
+// Each element causes its own status effect: fire burns, ice freezes, wind poisons,
+// earth stuns or weakens, lightning shocks.
 const SKILLS = [
-  // Fire: raw damage
-  { id: "firebolt",      element: "fire",      grade: 1, name: "Firebolt",         power: 1.7, desc: "Hurl a bolt of flame." },
-  { id: "flame_lash",    element: "fire",      grade: 2, name: "Flame Lash",       power: 2.4, hits: 2, desc: "Two burning whip strikes." },
-  { id: "meteor",        element: "fire",      grade: 3, name: "Meteor",           power: 5.5, desc: "Call down a blazing rock. Huge damage." },
+  // Fire: raw damage and burns
+  { id: "firebolt",      element: "fire",      grade: 1, name: "Firebolt",         power: 1.7, status: "burn", chance: 0.3, desc: "Hurl a bolt of flame. 30% chance to burn." },
+  { id: "flame_lash",    element: "fire",      grade: 2, name: "Flame Lash",       power: 2.4, hits: 2, status: "burn", chance: 0.35, desc: "Two burning whip strikes. Each has a 35% chance to burn." },
+  { id: "meteor",        element: "fire",      grade: 3, name: "Meteor",           power: 5.5, status: "burn", chance: 1, desc: "Call down a blazing rock. Huge damage and always burns." },
   // Ice: control
-  { id: "ice_spear",     element: "ice",       grade: 1, name: "Ice Spear",        power: 1.5, desc: "A sharp spear of ice." },
-  { id: "frost_armor",   element: "ice",       grade: 2, name: "Frost Armor",      power: 1.4, guard: true, desc: "Strike, then guard behind a shell of ice this turn." },
-  { id: "glacial_prison",element: "ice",       grade: 3, name: "Glacial Prison",   power: 3.5, stun: 1, desc: "Freeze the foe solid. It loses its next turn." },
-  // Wind: speed and healing
-  { id: "gust",          element: "wind",      grade: 1, name: "Gust",             power: 1.3, interrupt: true, desc: "A sharp blast that breaks a heavy attack wind-up." },
-  { id: "healing_breeze",element: "wind",      grade: 2, name: "Healing Breeze",   heal: 0.3, desc: "Heal 30% of your max HP (more with skill power)." },
-  { id: "cyclone",       element: "wind",      grade: 3, name: "Cyclone",          power: 1.6, hits: 3, desc: "Three spinning slashes, each can crit." },
-  // Earth: toughness
-  { id: "stone_fist",    element: "earth",     grade: 1, name: "Stone Fist",       power: 1.6, desc: "A heavy punch of rock." },
-  { id: "stone_skin",    element: "earth",     grade: 2, name: "Stone Skin",       power: 1.0, weaken: 3, desc: "Strike and harden: the foe deals 35% less damage for 3 turns." },
-  { id: "earthquake",    element: "earth",     grade: 3, name: "Earthquake",       power: 4.5, interrupt: true, desc: "Shake the ground. Big damage and breaks a wind-up." },
-  // Lightning: crits and stuns
-  { id: "spark",         element: "lightning", grade: 1, name: "Spark",            power: 1.4, stun: 0.25, desc: "A quick zap. 25% chance to stun." },
-  { id: "chain_lightning",element:"lightning", grade: 2, name: "Chain Lightning",  power: 2.9, critBonus: 0.2, desc: "Crackling bolt with +20% crit chance." },
-  { id: "thunder_judgment",element:"lightning",grade: 3, name: "Thunder Judgment", power: 4.2, critBonus: 0.35, stun: 0.5, desc: "+35% crit chance and 50% chance to stun." },
+  { id: "ice_spear",     element: "ice",       grade: 1, name: "Ice Spear",        power: 1.5, status: "frozen", chance: 0.15, desc: "A sharp spear of ice. 15% chance to freeze." },
+  { id: "frost_armor",   element: "ice",       grade: 2, name: "Frost Armor",      power: 1.4, guard: true, status: "frozen", chance: 0.2, desc: "Strike, then guard behind a shell of ice this turn. 20% chance to freeze." },
+  { id: "glacial_prison",element: "ice",       grade: 3, name: "Glacial Prison",   power: 3.5, status: "frozen", chance: 1, desc: "Freeze the foe solid. It loses its next turn." },
+  // Wind: poison, speed and healing
+  { id: "gust",          element: "wind",      grade: 1, name: "Gust",             power: 1.3, interrupt: true, status: "poison", chance: 0.5, desc: "A toxic blast that breaks a heavy attack wind-up. 50% chance to poison." },
+  { id: "healing_breeze",element: "wind",      grade: 2, name: "Healing Breeze",   heal: 0.3, cleanse: true, desc: "Heal 30% of your max HP (more with skill power) and cure your status effects." },
+  { id: "cyclone",       element: "wind",      grade: 3, name: "Cyclone",          power: 1.6, hits: 3, status: "poison", chance: 0.5, desc: "Three spinning slashes. Each can crit and has a 50% chance to add poison." },
+  // Earth: toughness, stuns and weaken
+  { id: "stone_fist",    element: "earth",     grade: 1, name: "Stone Fist",       power: 1.6, status: "stun", chance: 0.2, desc: "A heavy punch of rock. 20% chance to stun." },
+  { id: "stone_skin",    element: "earth",     grade: 2, name: "Stone Skin",       power: 1.0, status: "weaken", chance: 1, desc: "Strike and harden: the foe is weakened (deals 35% less damage) for 3 turns." },
+  { id: "earthquake",    element: "earth",     grade: 3, name: "Earthquake",       power: 4.5, interrupt: true, status: "stun", chance: 0.4, desc: "Shake the ground. Big damage, breaks a wind-up, 40% chance to stun." },
+  // Lightning: crits and shock
+  { id: "spark",         element: "lightning", grade: 1, name: "Spark",            power: 1.4, status: "shock", chance: 0.35, desc: "A quick zap. 35% chance to shock." },
+  { id: "chain_lightning",element:"lightning", grade: 2, name: "Chain Lightning",  power: 2.9, critBonus: 0.2, status: "shock", chance: 0.5, desc: "Crackling bolt with +20% crit chance. 50% chance to shock." },
+  { id: "thunder_judgment",element:"lightning",grade: 3, name: "Thunder Judgment", power: 4.2, critBonus: 0.35, status: "shock", chance: 1, desc: "+35% crit chance and always shocks." },
 ];
 const skillById = Object.fromEntries(SKILLS.map(sk => [sk.id, sk]));
 function skillGrade(sk) { return SKILL_GRADES[sk.grade - 1]; }
-const WEAKEN_MULT = 0.65; // weakened monsters deal 35% less damage
+
+// ---------- Status effects ----------
+// Both you and monsters can get these. `turns` counts the turns of whoever has it:
+// it goes down by 1 at the end of each of their turns.
+//   Burn and poison hurt at the end of each turn. Their damage is based on the hit that caused them.
+//   Frozen and stun make you lose your next turn. Afterwards you are "steady" for a turn and can't be frozen or stunned again right away.
+//   Shock gives a chance to fail to act. Weaken means you deal 35% less damage.
+//   Monsters can't get the effect of their own element (a fire monster can't burn).
+const STATUS = {
+  burn:   { name: "Burn",   icon: "🔥", turns: 3, dot: 0.25,  desc: "Takes fire damage at the end of each turn." },
+  poison: { name: "Poison", icon: "☠️", turns: 4, dot: 0.12, maxStacks: 5, desc: "Takes poison damage at the end of each turn. Stacks up to 5 times." },
+  frozen: { name: "Frozen", icon: "🧊", turns: 1, skip: true, desc: "Frozen solid: loses the next turn." },
+  stun:   { name: "Stun",   icon: "💫", turns: 1, skip: true, desc: "Dazed: loses the next turn." },
+  shock:  { name: "Shock",  icon: "⚡", turns: 3, fail: 0.3,  desc: "30% chance to fail to act each turn." },
+  weaken: { name: "Weaken", icon: "🥀", turns: 3, mult: 0.65, desc: "Deals 35% less damage." },
+  steady: { name: "Steady", icon: "🧱", turns: 2, desc: "Just shook off a freeze or stun: can't be frozen or stunned right now." },
+};
+// The status effect that goes with each element. Weapons with an element have a small chance to cause it.
+const ELEMENT_STATUS = { fire: "burn", ice: "frozen", wind: "poison", earth: "stun", lightning: "shock" };
+const WEAPON_STATUS_CHANCE = 0.1;
 
 // ---------- Monsters ----------
 
@@ -235,7 +256,7 @@ const SPAWN = {
 // Monster stats grow exponentially with tier: stat = start * growth ^ step.
 // Random monsters of tier T use step (T-1)*5 + 2, the boss of tier T uses step T*5 - 1 (plus BOSS_MULT).
 const MONSTER_SCALING = {
-  hp:      { start: 30,  growth: 1.17 },
+  hp:      { start: 42,  growth: 1.22 }, // battles last about 8 to 12 turns with skills, bosses about 20
   attack:  { start: 4,   growth: 1.17 },
   defense: { start: 1.5, growth: 1.18 },
   agility: { start: 4,   growth: 1.12 },
@@ -253,7 +274,32 @@ const BATTLE = {
   critMultiplier: 2,      // a critical hit does double damage; crit chance = luck %
   heavyEvery: 3,          // monsters wind up a heavy attack every 3rd turn
   heavyMultiplier: 1.8,
-  guardMultiplier: 0.4,   // guarding takes only 40% damage
+  heavyStunChance: 0.35,  // a heavy attack that lands (not guarded) can stun you
+  guardMultiplier: 0.4,   // guarding takes only 40% damage, and blocks status effects
+  specialChance: 0.35,    // how often a monster uses its element move instead of a normal attack
+  warCryChance: 0.2,      // bosses sometimes roar to weaken you
+};
+
+// Dodge and parry: when a monster attacks, a prompt pops up. Tap in time to react.
+//   Dodge: avoid the whole hit. Parry: take only 30% damage and strike back (not against heavy attacks).
+//   Pressing before the prompt says NOW counts as too early.
+const REACTION = {
+  waitMin: 500, waitMax: 1100, // the monster winds up for this long (ms, random) before the window opens
+  windowMin: 600,              // the window is 0.6 to 1 second: longer when you're quicker than the monster
+  windowMax: 1000,
+  heavyWindow: 0.85,           // heavy attacks give a shorter window
+  bossWindow: 0.9,             // and so do bosses
+  parryTaken: 0.3,             // a parried hit does 30% damage
+  parryCounter: 0.6,           // your counterattack: 60% of a normal attack
+};
+
+// Each monster has a special move of its own element, which can cause that element's status effect.
+const MONSTER_MOVES = {
+  fire:      { name: "Flame Breath", power: 1.15, status: "burn",   chance: 0.6 },
+  ice:       { name: "Frost Fang",   power: 1.1,  status: "frozen", chance: 0.3 },
+  wind:      { name: "Venom Gust",   power: 1.0,  status: "poison", chance: 0.7 },
+  earth:     { name: "Boulder Slam", power: 1.2,  status: "stun",   chance: 0.3 },
+  lightning: { name: "Static Claw",  power: 1.1,  status: "shock",  chance: 0.5 },
 };
 
 // Stats and rewards for a monster of this tier (1-4).
@@ -377,6 +423,11 @@ function migrate(saved) {
     if (saved.battle && !saved.battle.monster) saved.battle = null;
     saved.version = 6;
   }
+  if (saved.version < 7) {
+    // v6 -> v7: full-screen battles with status effects. Nothing is reset; a fight in progress
+    // is converted by normalizeBattle() when it loads.
+    saved.version = 7;
+  }
   // Later versions add their steps here.
   return saved;
 }
@@ -413,7 +464,7 @@ function load() {
         .slice(0, SPAWN.max);
       s.nextSpawnAt = typeof saved.nextSpawnAt === "number" ? saved.nextSpawnAt : null;
     }
-    if (saved.battle && saved.battle.monster) s.battle = saved.battle;
+    if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
     console.warn("Could not load save", e);
   }
@@ -704,6 +755,12 @@ function unequipSkill(index) {
 // ---------- Battle ----------
 // A battle is plain data in state.battle, so it's saved and survives a page reload.
 // Your stats are locked in when the fight starts.
+//
+// A round goes like this:
+//   1. Your turn (phase "hero"): pick an action. Then your burn/poison hurt you and your effects count down.
+//   2. The monster's turn (phase "monster"): it picks a move (monsterChooseMove), you get a moment to dodge
+//      or parry (see REACTION), then the move lands (monsterResolve) and its own effects count down.
+// The rules below never wait for anything; the screen adds the pauses and the dodge prompt.
 
 // uid: a waiting monster's uid, or "boss" for your tier's boss.
 function startBattle(uid) {
@@ -720,83 +777,200 @@ function startBattle(uid) {
   const hero = heroStats();
   state.battle = {
     monster: m,        // a copy of the monster, so the fight survives a reload
-    hero: { ...hero, element: weaponElement() },
+    hero: { ...hero, element: weaponElement(), weapon: state.equipped.weapon ? state.equipped.weapon.id : null },
     // Skills you brought, with their level, locked in like your stats.
     skills: state.skillSlots.map(id => id ? { id, level: skillLevel(id) } : null),
-    stunned: false,    // the monster loses its next turn
-    weakTurns: 0,      // turns left that the monster deals less damage
+    effects: { hero: {}, monster: {} }, // status effects: id -> { turns, dmg, stacks }
     heroHp: hero.hp,
     monsterHp: m.stats.hp,
     mana: BATTLE.startMana,
     turn: 1,
+    phase: "hero",     // whose turn it is: "hero" or "monster"
+    pending: null,     // the monster's chosen move while you get the chance to react
     guarding: false,
     charging: false,   // the monster is winding up a heavy attack
-    log: [`A wild ${m.name} appears!`],
+    log: [`A wild ${m.name} appears!`, "When it attacks, tap Dodge or Parry the moment it says NOW!"],
     result: null,      // "win", "lose" or "fled" once it's over
   };
   // Quicker monsters strike first.
   if (m.stats.agility > hero.agility) {
     state.battle.log.push(`${m.name} is quicker and strikes first!`);
-    monsterTurn();
+    state.battle.phase = "monster";
   }
   save();
   openBattle();
 }
 
+// Fill in anything an older save's battle is missing, so a fight in progress carries on.
+function normalizeBattle(b) {
+  if (!b.effects) {
+    b.effects = { hero: {}, monster: {} };
+    if (b.stunned) b.effects.monster.stun = { turns: 1 };
+    if (b.weakTurns > 0) b.effects.monster.weaken = { turns: b.weakTurns };
+  }
+  delete b.stunned;
+  delete b.weakTurns;
+  if (b.phase !== "monster") b.phase = "hero";
+  if (b.phase === "hero") b.pending = null;
+  if (!b.pending) b.pending = null;
+  return b;
+}
+
 function battleLog(msg) {
   const b = state.battle;
   b.log.push(msg);
-  if (b.log.length > 60) b.log.shift();
+  if (b.log.length > 80) b.log.shift();
 }
 
-// Everything you can do on your turn goes through here, so skills can plug in later.
+// Little floating numbers and shakes for the battle screen. The screen reads and clears this list.
+let battleFxQueue = [];
+function battleFx(side, text, kind) { battleFxQueue.push({ side, text, kind }); }
+
+function foeName(side) { return side === "hero" ? "You" : state.battle.monster.name; }
+function hasEffect(side, id) { const e = state.battle.effects[side][id]; return !!(e && e.turns > 0); }
+
+// Try to give `side` a status effect. srcDamage is the hit that caused it (burn and poison damage come from it).
+function applyStatus(side, id, srcDamage = 0) {
+  const b = state.battle;
+  const st = STATUS[id];
+  const fx = b.effects[side];
+  const who = side === "hero" ? "You are" : `${b.monster.name} is`;
+  if (st.skip && (hasEffect(side, "steady") || hasEffect(side, "frozen") || hasEffect(side, "stun"))) return false;
+  // Monsters shrug off the effect of their own element: fire monsters don't burn, ice monsters don't freeze...
+  if (side === "monster" && ELEMENT_STATUS[b.monster.element] === id) {
+    battleLog(`${b.monster.name} is ${elementById[b.monster.element].name.toLowerCase()}-born and shrugs off ${st.name.toLowerCase()}.`);
+    return false;
+  }
+  if (id === "poison") {
+    const cur = fx.poison && fx.poison.turns > 0 ? fx.poison : { stacks: 0, dmg: 0 };
+    if (cur.stacks >= st.maxStacks) { cur.turns = st.turns; fx.poison = cur; return true; }
+    cur.stacks += 1;
+    cur.dmg += Math.max(1, Math.round(srcDamage * st.dot));
+    cur.turns = st.turns;
+    fx.poison = cur;
+    battleLog(`☠️ ${who} poisoned${cur.stacks > 1 ? ` (×${cur.stacks})` : ""}!`);
+  } else if (id === "burn") {
+    const dmg = Math.max(1, Math.round(srcDamage * st.dot));
+    fx.burn = { turns: st.turns, dmg: Math.max(dmg, fx.burn && fx.burn.turns > 0 ? fx.burn.dmg : 0) };
+    battleLog(`🔥 ${who} burning!`);
+  } else {
+    fx[id] = { turns: st.turns };
+    const words = { frozen: "frozen solid", stun: "stunned", shock: "shocked", weaken: "weakened" };
+    battleLog(`${st.icon} ${who} ${words[id] || id}!`);
+  }
+  battleFx(side, `${st.icon} ${st.name}`, "status");
+  return true;
+}
+
+// End of `side`'s turn: burn and poison hurt, then every effect counts down by one.
+function endOfTurnEffects(side) {
+  const b = state.battle;
+  const fx = b.effects[side];
+  for (const id of ["burn", "poison"]) {
+    const e = fx[id];
+    if (!e || e.turns <= 0) continue;
+    if (side === "hero") b.heroHp = Math.max(0, b.heroHp - e.dmg);
+    else b.monsterHp = Math.max(0, b.monsterHp - e.dmg);
+    battleLog(`${STATUS[id].icon} ${side === "hero" ? "You take" : `${b.monster.name} takes`} ${e.dmg} ${id} damage.`);
+    battleFx(side, `-${e.dmg}`, id);
+  }
+  for (const [id, e] of Object.entries(fx)) {
+    e.turns -= 1;
+    if (e.turns <= 0) delete fx[id];
+  }
+}
+
+// Is `side` frozen or stunned at the start of its turn? Uses up the effect and makes it steady.
+function skipsTurn(side) {
+  const fx = state.battle.effects[side];
+  const id = hasEffect(side, "frozen") ? "frozen" : hasEffect(side, "stun") ? "stun" : null;
+  if (!id) return null;
+  fx.steady = { turns: STATUS.steady.turns };
+  return id;
+}
+
+function damageMult(side) { return hasEffect(side, "weaken") ? STATUS.weaken.mult : 1; }
+
+function hitText(hit) {
+  let msg = "";
+  if (hit.crit) msg += " Critical hit!";
+  if (hit.mult > 1) msg += " It's weak to that!";
+  if (hit.mult < 1) msg += " It resists that.";
+  return msg;
+}
+
+// A normal weapon attack from you. extra scales the damage (used by parry counters).
+function heroAttack(extra = 1, label = "You hit") {
+  const b = state.battle;
+  const m = b.monster;
+  const hit = rollHit({
+    attack: b.hero.attack, defense: m.stats.defense,
+    attackEl: b.hero.element, targetEl: m.element,
+    critChance: b.hero.luck / 100,
+    dodge: extra === 1 ? dodgeChance(m.stats.agility, b.hero.agility) : 0,
+    extra: extra * damageMult("hero"),
+  });
+  if (hit.dodged) {
+    battleLog(`You attack, but ${m.name} dodges!`);
+    battleFx("monster", "Miss", "miss");
+    return;
+  }
+  b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
+  battleLog(`${label} ${m.name} for ${hit.damage}.${hitText(hit)}`);
+  battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
+  if (b.hero.element && b.monsterHp > 0 && Math.random() < WEAPON_STATUS_CHANCE) {
+    applyStatus("monster", ELEMENT_STATUS[b.hero.element], hit.damage);
+  }
+}
+
+// Your turn. action: "attack", "guard", "flee", "skill0".."skill2", or "wait" (only while frozen or stunned).
+// Returns true if the turn happened.
 function battleAction(action) {
   const b = state.battle;
-  if (!b || b.result) return;
+  if (!b || b.result || b.phase !== "hero") return false;
   const m = b.monster;
+  const skip = hasEffect("hero", "frozen") || hasEffect("hero", "stun");
 
-  if (action === "attack") {
-    const hit = rollHit({
-      attack: b.hero.attack, defense: m.stats.defense,
-      attackEl: b.hero.element, targetEl: m.element,
-      critChance: b.hero.luck / 100,
-      dodge: dodgeChance(m.stats.agility, b.hero.agility),
-    });
-    if (hit.dodged) {
-      battleLog(`You attack, but ${m.name} dodges!`);
-    } else {
-      b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
-      let msg = `You hit ${m.name} for ${hit.damage}.`;
-      if (hit.crit) msg += " Critical hit!";
-      if (hit.mult > 1) msg += " It's weak to that!";
-      if (hit.mult < 1) msg += " It resists that.";
-      battleLog(msg);
-    }
-  } else if (action === "guard") {
-    b.guarding = true;
-    battleLog("You raise your guard.");
-  } else if (action === "flee") {
+  if (action === "flee") {
     battleLog("You run away. No harm done.");
-    return endBattle("fled");
-  } else if (/^skill[0-9]$/.test(action)) {
-    const slot = (b.skills || [])[Number(action.slice(5))];
-    const sk = slot && skillById[slot.id];
-    if (!sk || b.mana < skillGrade(sk).mana) return;
-    b.mana -= skillGrade(sk).mana;
-    castSkill(sk, slot.level, m);
+    endBattle("fled");
+    return true;
+  }
+  if (skip) {
+    if (action !== "wait") return false;
+    const id = skipsTurn("hero");
+    battleLog(id === "frozen" ? "🧊 You're frozen solid and can't move!" : "💫 You're stunned and can't move!");
+  } else if (action === "attack" || action === "guard" || /^skill[0-9]$/.test(action)) {
+    let sk = null, slot = null;
+    if (action.startsWith("skill")) {
+      slot = (b.skills || [])[Number(action.slice(5))];
+      sk = slot && skillById[slot.id];
+      if (!sk || b.mana < skillGrade(sk).mana) return false;
+    }
+    if (action !== "guard" && hasEffect("hero", "shock") && Math.random() < STATUS.shock.fail) {
+      battleLog("⚡ You're shocked and your body won't move!");
+      battleFx("hero", "⚡ Shocked", "status");
+    } else if (action === "attack") {
+      heroAttack();
+    } else if (action === "guard") {
+      b.guarding = true;
+      battleLog("You raise your guard. (Less damage and no status effects this turn.)");
+    } else {
+      b.mana -= skillGrade(sk).mana;
+      castSkill(sk, slot.level, m);
+    }
   } else {
-    return; // unknown action
+    return false; // unknown action
   }
 
-  if (b.monsterHp <= 0) return endBattle("win");
-  monsterTurn();
-  if (b.heroHp <= 0) return endBattle("lose");
-
-  b.turn += 1;
-  b.guarding = false;
-  b.mana = Math.min(BATTLE.maxMana, b.mana + BATTLE.manaPerTurn);
+  if (b.monsterHp <= 0) { endBattle("win"); return true; }
+  endOfTurnEffects("hero");
+  if (b.heroHp <= 0) { endBattle("lose"); return true; }
+  if (b.monsterHp <= 0) { endBattle("win"); return true; }
+  b.phase = "monster";
+  b.pending = null;
   save();
-  renderBattle();
+  return true;
 }
 
 // Use a skill. Mana is already paid. Skills never miss.
@@ -815,13 +989,12 @@ function castSkill(sk, level, m) {
         attackEl: sk.element, targetEl: m.element,
         critChance: b.hero.luck / 100 + (sk.critBonus || 0),
         dodge: 0,
+        extra: damageMult("hero"),
       });
       b.monsterHp = Math.max(0, b.monsterHp - hit.damage);
-      let msg = `${sk.name} hits ${m.name} for ${hit.damage}.`;
-      if (hit.crit) msg += " Critical hit!";
-      if (hit.mult > 1) msg += " It's weak to that!";
-      if (hit.mult < 1) msg += " It resists that.";
-      battleLog(msg);
+      battleLog(`${sk.name} hits ${m.name} for ${hit.damage}.${hitText(hit)}`);
+      battleFx("monster", `-${hit.damage}${hit.crit ? "!" : ""}`, hit.crit ? "crit" : "hit");
+      if (sk.status && b.monsterHp > 0 && Math.random() < sk.chance) applyStatus("monster", sk.status, hit.damage);
     }
   }
   if (sk.heal) {
@@ -829,6 +1002,12 @@ function castSkill(sk, level, m) {
     const before = b.heroHp;
     b.heroHp = Math.min(b.hero.hp, b.heroHp + amount);
     battleLog(`You heal ${b.heroHp - before} HP.`);
+    battleFx("hero", `+${b.heroHp - before}`, "heal");
+  }
+  if (sk.cleanse) {
+    const bad = ["burn", "poison", "frozen", "stun", "shock", "weaken"].filter(id => hasEffect("hero", id));
+    for (const id of bad) delete b.effects.hero[id];
+    if (bad.length) battleLog("The breeze washes away your status effects.");
   }
   if (b.monsterHp <= 0) return;
   if (sk.guard) battleLog("Ice forms around you. You are guarding this turn.");
@@ -836,53 +1015,118 @@ function castSkill(sk, level, m) {
     b.charging = false;
     battleLog(`${m.name}'s heavy attack is broken!`);
   }
-  if (sk.weaken) {
-    b.weakTurns = sk.weaken;
-    battleLog(`${m.name} is weakened for ${sk.weaken} turns.`);
-  }
-  if (sk.stun && Math.random() < sk.stun) {
-    b.stunned = true;
-    battleLog(`${m.name} is stunned!`);
-  }
 }
 
-function monsterTurn() {
+// Start of the monster's turn: decide what it does. Stored in b.pending so a reload doesn't change it.
+//   pending.kind: "skip" (frozen/stunned), "fail" (shocked), "warcry", or "attack" (needs a reaction)
+function monsterChooseMove() {
   const b = state.battle;
+  if (!b || b.result || b.phase !== "monster") return null;
+  if (b.pending) return b.pending;
   const m = b.monster;
-  if (b.stunned) {
-    b.stunned = false;
-    battleLog(`${m.name} is stunned and can't move.`);
-    return;
-  }
-  const weak = b.weakTurns > 0;
-  if (weak) b.weakTurns -= 1;
-  const heavy = b.charging;
-  b.charging = false;
-  const hit = rollHit({
-    attack: m.stats.attack, defense: b.hero.defense,
-    attackEl: m.element, targetEl: null, // armor has no element (yet)
-    critChance: 0,
-    dodge: dodgeChance(b.hero.agility, m.stats.agility),
-    extra: (heavy ? BATTLE.heavyMultiplier : 1) * (b.guarding ? BATTLE.guardMultiplier : 1) * (weak ? WEAKEN_MULT : 1),
-  });
-  const what = heavy ? "unleashes a heavy attack" : "attacks";
-  if (hit.dodged) {
-    battleLog(`${m.name} ${what}, but you dodge!`);
+  let p;
+  const skip = skipsTurn("monster");
+  if (skip) {
+    p = { kind: "skip", text: skip === "frozen" ? `🧊 ${m.name} is frozen solid and can't move!` : `💫 ${m.name} is stunned and can't move!` };
+  } else if (hasEffect("monster", "shock") && Math.random() < STATUS.shock.fail) {
+    p = { kind: "fail", text: `⚡ ${m.name} is shocked and can't move!` };
+  } else if (b.charging) {
+    p = { kind: "attack", heavy: true, name: "Heavy Attack", power: BATTLE.heavyMultiplier };
+  } else if (m.boss && !hasEffect("hero", "weaken") && Math.random() < BATTLE.warCryChance) {
+    p = { kind: "warcry", text: `📣 ${m.name} lets out a terrifying war cry!` };
+  } else if (Math.random() < BATTLE.specialChance) {
+    const mv = MONSTER_MOVES[m.element];
+    p = { kind: "attack", name: mv.name, power: mv.power, status: mv.status, chance: mv.chance };
   } else {
-    b.heroHp = Math.max(0, b.heroHp - hit.damage);
-    const notes = [b.guarding && "guarded", weak && "weakened"].filter(Boolean).join(", ");
-    battleLog(`${m.name} ${what} for ${hit.damage}${notes ? ` (${notes})` : ""}.`);
+    p = { kind: "attack", name: "Attack", power: 1 };
   }
-  if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
-    b.charging = true;
-    battleLog(`${m.name} is winding up a heavy attack! Guard to soften it.`);
+  b.pending = p;
+  save();
+  return p;
+}
+
+// How long the dodge/parry window lasts (ms) for the pending attack.
+function reactionWindow() {
+  const b = state.battle;
+  const h = Math.max(0, b.hero.agility), a = Math.max(0, b.monster.stats.agility);
+  const share = h + a > 0 ? h / (h + a) : 0.5;
+  let ms = REACTION.windowMin + (REACTION.windowMax - REACTION.windowMin) * share;
+  if (b.pending && b.pending.heavy) ms *= REACTION.heavyWindow;
+  if (b.monster.boss) ms *= REACTION.bossWindow;
+  return Math.round(ms);
+}
+
+// The monster's move lands. reaction: "dodge", "parry", "early" (pressed too soon) or null (no press / too late).
+function monsterResolve(reaction = null) {
+  const b = state.battle;
+  if (!b || b.result || b.phase !== "monster") return;
+  const p = b.pending || monsterChooseMove();
+  const m = b.monster;
+
+  if (p.kind === "skip" || p.kind === "fail") {
+    battleLog(p.text);
+  } else if (p.kind === "warcry") {
+    battleLog(p.text);
+    if (b.guarding) battleLog("Your guard holds firm.");
+    else applyStatus("hero", "weaken");
+  } else {
+    const heavy = !!p.heavy;
+    b.charging = false;
+    const what = heavy ? "unleashes a heavy attack" : p.name === "Attack" ? "attacks" : `uses ${p.name}`;
+    if (reaction === "parry" && heavy) reaction = null; // heavy attacks can't be parried
+    if (reaction === "dodge") {
+      battleLog(`${m.name} ${what}, but you dodge it perfectly!`);
+      battleFx("hero", "Dodged!", "miss");
+    } else {
+      const hit = rollHit({
+        attack: m.stats.attack, defense: b.hero.defense,
+        attackEl: m.element, targetEl: null, // armor has no element (yet)
+        critChance: 0,
+        dodge: reaction === "parry" ? 0 : dodgeChance(b.hero.agility, m.stats.agility),
+        extra: p.power * (b.guarding ? BATTLE.guardMultiplier : 1) * damageMult("monster")
+          * (reaction === "parry" ? REACTION.parryTaken : 1),
+      });
+      if (hit.dodged) {
+        battleLog(`${m.name} ${what}, but you sidestep it!`);
+        battleFx("hero", "Miss", "miss");
+      } else {
+        b.heroHp = Math.max(0, b.heroHp - hit.damage);
+        const notes = [reaction === "parry" && "parried", b.guarding && "guarded", hasEffect("monster", "weaken") && "weakened"].filter(Boolean).join(", ");
+        battleLog(`${m.name} ${what} for ${hit.damage}${notes ? ` (${notes})` : ""}.`);
+        battleFx("hero", `-${hit.damage}`, "hit");
+        if (b.heroHp > 0 && reaction !== "parry" && !b.guarding) {
+          if (p.status && Math.random() < p.chance) applyStatus("hero", p.status, hit.damage);
+          if (heavy && Math.random() < BATTLE.heavyStunChance) applyStatus("hero", "stun");
+        }
+      }
+      if (reaction === "parry" && b.heroHp > 0) heroAttack(REACTION.parryCounter, "You parry and counter");
+    }
+    // Every few turns the monster winds up a heavy attack for its next turn.
+    if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
+      b.charging = true;
+      battleLog(`⚠️ ${m.name} is winding up a heavy attack! Guard, dodge or break it with a skill.`);
+    }
   }
+  b.pending = null;
+
+  if (b.heroHp <= 0) return endBattle("lose");
+  if (b.monsterHp <= 0) return endBattle("win");
+  endOfTurnEffects("monster");
+  if (b.monsterHp <= 0) return endBattle("win");
+
+  // New round.
+  b.turn += 1;
+  b.guarding = false;
+  b.mana = Math.min(BATTLE.maxMana, b.mana + BATTLE.manaPerTurn);
+  b.phase = "hero";
+  save();
 }
 
 function endBattle(result) {
   const b = state.battle;
   const m = b.monster;
   b.result = result;
+  b.pending = null;
   if (result === "win") {
     state.drops[m.element] += m.reward.drops;
     earnCoins(m.reward.coins);
@@ -909,16 +1153,17 @@ function endBattle(result) {
     battleLog(`${m.name} knocks you out. You wake up back at camp, nothing lost.`);
   }
   save();
-  renderBattle();
-  buildAdventure();
-  render();
+  if (typeof document !== "undefined") {
+    buildAdventure();
+    render();
+  }
 }
 
 function closeBattle() {
   if (state.battle && !state.battle.result) return; // finish or run away first
   state.battle = null;
   save();
-  document.getElementById("battle").hidden = true;
+  hideBattleScreen();
   render();
 }
 
@@ -1247,78 +1492,323 @@ function renderAdventure() {
 
 function hpBar(now, max) {
   const pct = Math.max(0, Math.min(100, (now / max) * 100));
-  return `<div class="hpbar"><div class="hpfill${pct < 30 ? " low" : ""}" style="width:${pct}%"></div></div>
-    <div class="small num">${fmt(now)} / ${fmt(max)} HP</div>`;
+  return `<div class="hpbar"><div class="hpfill${pct < 30 ? " low" : pct < 60 ? " mid" : ""}" style="width:${pct}%"></div></div>
+    <div class="small num bt-hpnum">${fmt(now)} / ${fmt(max)} HP</div>`;
+}
+
+// ---------- Battle screen ----------
+// Fights take over the whole screen. The rules above decide what happens; this part adds the pauses,
+// the dodge/parry prompt, floating numbers and shakes.
+
+const battleUi = { busy: false, timers: [], reaction: null, built: null };
+
+function battleScreen() { return document.getElementById("battle"); }
+function battlePart(key) { return battleScreen().querySelector(`[data-k="${key}"]`); }
+function later(ms, fn) { battleUi.timers.push(setTimeout(fn, ms)); }
+function clearBattleTimers() {
+  battleUi.timers.forEach(clearTimeout);
+  battleUi.timers = [];
+  battleUi.reaction = null;
+  battleUi.busy = false;
 }
 
 function openBattle() {
-  document.getElementById("battle").hidden = false;
+  clearBattleTimers();
+  battleScreen().hidden = false;
+  document.body.classList.add("in-battle");
+  buildBattleScreen();
   renderBattle();
   render();
+  // A fight that was reloaded on the monster's turn carries on from there.
+  const b = state.battle;
+  if (b && !b.result && b.phase === "monster") {
+    battleUi.busy = true;
+    later(900, runMonsterTurn);
+  }
 }
 
-// Redraws the battle window. Only called when something happens, not every frame.
-function renderBattle() {
+// goAdventure: on phones, land on the Adventure panel afterwards.
+function hideBattleScreen(goAdventure = true) {
+  clearBattleTimers();
+  battleUi.built = null;
+  battleScreen().hidden = true;
+  document.body.classList.remove("in-battle");
+  if (goAdventure && typeof showView === "function") showView("adventure");
+}
+
+// The parts of the screen that stay put for the whole fight (sprites, layout).
+function buildBattleScreen() {
   const b = state.battle;
-  const overlay = document.getElementById("battle");
-  if (!b) { overlay.hidden = true; return; }
+  if (!b) return;
   const m = b.monster;
   const tier = TIERS[m.tier - 1];
-  const box = overlay.querySelector(".battle-box");
+  const weapon = b.hero.weapon && recipeById[b.hero.weapon];
+  battleUi.built = b;
+  battleScreen().innerHTML = `
+    <div class="bt-wrap bt-tier-${m.tier}">
+      <div class="bt-top">
+        <span>${tier.icon} ${tier.name} · Danger level ${m.tier}</span>
+        <span class="num" data-k="turn"></span>
+      </div>
+      <div class="bt-arena">
+        <div class="bt-info foe" data-k="foeInfo"></div>
+        <div class="bt-spot foe${m.boss ? " boss" : ""}">
+          <div class="bt-sprite" data-k="foeSprite">${m.icon}</div>
+          <div class="bt-pad"></div>
+          <div class="bt-fx" data-k="foeFx"></div>
+        </div>
+        <div class="bt-spot you">
+          <div class="bt-sprite" data-k="youSprite">🧝${weapon ? `<span class="bt-weapon">${weapon.icon}</span>` : ""}</div>
+          <div class="bt-pad"></div>
+          <div class="bt-fx" data-k="youFx"></div>
+        </div>
+        <div class="bt-info you" data-k="youInfo"></div>
+        <div class="bt-prompt" data-k="prompt" hidden></div>
+      </div>
+      <div class="bt-bottom">
+        <div class="bt-log" data-k="log" aria-live="polite"></div>
+        <div class="bt-menu" data-k="menu"></div>
+      </div>
+    </div>`;
+}
+
+// Small icons for status effects, with turns left (and stacks for poison).
+function statusChips(side) {
+  const fx = state.battle.effects[side];
+  return Object.entries(fx).filter(([, e]) => e.turns > 0).map(([id, e]) => {
+    const st = STATUS[id];
+    const extra = id === "poison" && e.stacks > 1 ? `×${e.stacks} ` : "";
+    const dmg = e.dmg ? ` ${e.dmg} damage per turn.` : "";
+    return `<span class="st st-${id}" title="${st.name}: ${st.desc}${dmg} ${e.turns} turn${e.turns > 1 ? "s" : ""} left.">${st.icon}<span class="num">${extra}${e.turns}</span></span>`;
+  }).join("");
+}
+
+// Redraws the parts of the battle screen that change.
+function renderBattle() {
+  const b = state.battle;
+  if (!b) { if (!battleScreen().hidden) hideBattleScreen(false); return; }
+  if (battleUi.built !== b) buildBattleScreen();
+  const m = b.monster;
+
+  battlePart("turn").textContent = b.result ? "" : `Turn ${b.turn}`;
+
+  battlePart("foeInfo").innerHTML = `
+    <div class="row"><span class="name">${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
+    ${hpBar(b.monsterHp, m.stats.hp)}
+    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`;
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
-  const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) => {
-    const slot = (b.skills || [])[i];
-    const sk = slot && skillById[slot.id];
-    if (!sk) return `<button class="skill" disabled title="Buy skills in the Skills panel and equip them before a fight">Empty skill slot ${i + 1}</button>`;
-    const mana = skillGrade(sk).mana;
-    return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${b.mana < mana ? "disabled" : ""}
-      title="${sk.desc}">${elementById[sk.element].icon} ${sk.name} <span class="small">Lv ${slot.level} · 💧${mana}</span></button>`;
-  }).join("");
+  battlePart("youInfo").innerHTML = `
+    <div class="row"><span class="name">You</span>${elementTag(b.hero.element)}</div>
+    ${hpBar(b.heroHp, b.hero.hp)}
+    <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
+    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}</div>`;
 
-  let footer;
+  const youSprite = battlePart("youSprite"), foeSprite = battlePart("foeSprite");
+  youSprite.classList.toggle("guarding", b.guarding && !b.result);
+  for (const [sprite, side] of [[youSprite, "hero"], [foeSprite, "monster"]]) {
+    for (const id of ["frozen", "stun", "burn", "poison", "shock"]) sprite.classList.toggle(`is-${id}`, hasEffect(side, id));
+  }
+  foeSprite.classList.toggle("fainted", b.result === "win");
+  youSprite.classList.toggle("fainted", b.result === "lose");
+
+  const logBox = battlePart("log");
+  logBox.innerHTML = b.log.map(l => `<div>${l}</div>`).join("");
+  logBox.scrollTop = logBox.scrollHeight;
+
+  renderBattleMenu();
+}
+
+function renderBattleMenu() {
+  const b = state.battle;
+  const m = b.monster;
+  const menu = battlePart("menu");
   if (b.result) {
     const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
-    footer = `<div class="result ${b.result}">${titles[b.result]}</div>
-      <div class="small">${b.result === "win"
-        ? (m.boss ? "" : `A new monster appears every ${spawnEveryText()}.`)
-        : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
-      <div class="buttons"><button class="primary" data-k="close">Back to the game</button></div>`;
-  } else {
-    footer = `
-      <div class="actions">
-        <button class="primary" data-a="attack">⚔️ Attack ${elementTag(b.hero.element)}</button>
-        <button data-a="guard" title="Take much less damage this turn">🛡️ Guard</button>
-        ${skills}
-        <button class="danger" data-a="flee">🏃 Run away</button>
+    const e = elementById[m.element];
+    menu.innerHTML = `
+      <div class="bt-result">
+        <div class="result ${b.result}">${titles[b.result]}</div>
+        <div class="small">${b.result === "win"
+          ? `You got ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`
+          : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
+        <button class="primary big" data-k="close">Back to Adventure</button>
       </div>`;
+    battlePart("close").onclick = closeBattle;
+    return;
   }
 
-  box.innerHTML = `
-    <div class="small">${tier.icon} ${tier.name} · Danger level ${m.tier} · Turn ${b.turn}</div>
-    <h2 id="battle-title">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}</h2>
-    <div class="fighters">
-      <div class="fighter">
-        <div class="row"><span class="name">🧝 You</span>${elementTag(b.hero.element)}</div>
-        ${hpBar(b.heroHp, b.hero.hp)}
-        <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
-      </div>
-      <div class="fighter">
-        <div class="row"><span class="name">${m.icon} ${m.name}</span>${elementTag(m.element)}</div>
-        ${hpBar(b.monsterHp, m.stats.hp)}
-        <div class="small">${b.charging && !b.result ? "⚠️ Winding up a heavy attack!" : "&nbsp;"}</div>
-      </div>
-    </div>
-    <div class="battle-log" data-k="log">${b.log.map(l => `<div>${l}</div>`).join("")}</div>
-    ${footer}`;
-
-  box.querySelectorAll("[data-a]").forEach(btn => { btn.onclick = () => battleAction(btn.dataset.a); });
-  const close = box.querySelector('[data-k="close"]');
-  if (close) close.onclick = closeBattle;
-  const logBox = box.querySelector('[data-k="log"]');
-  logBox.scrollTop = logBox.scrollHeight;
+  const myTurn = b.phase === "hero" && !battleUi.busy;
+  const skipped = hasEffect("hero", "frozen") || hasEffect("hero", "stun");
+  let html;
+  if (b.phase === "hero" && skipped && !battleUi.busy) {
+    const frozen = hasEffect("hero", "frozen");
+    html = `<button class="primary big wide" data-a="wait">${frozen ? "🧊 You're frozen solid! Tap to continue" : "💫 You're stunned! Tap to continue"}</button>`;
+  } else {
+    const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) => {
+      const slot = (b.skills || [])[i];
+      const sk = slot && skillById[slot.id];
+      if (!sk) return `<button class="skill" disabled title="Buy skills in the Skills panel and equip them before a fight">Empty skill slot</button>`;
+      const cost = skillGrade(sk).mana;
+      const st = sk.status ? ` ${STATUS[sk.status].icon}` : "";
+      return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${!myTurn || b.mana < cost ? "disabled" : ""}
+        title="${sk.desc}">${elementById[sk.element].icon} ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>`;
+    }).join("");
+    html = `
+      <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack ${elementTag(b.hero.element)}</button>
+      <button data-a="guard" ${myTurn ? "" : "disabled"} title="Take 40% damage and no status effects this turn">🛡️ Guard</button>
+      ${skills}`;
+  }
+  menu.innerHTML = `
+    <div class="bt-hint small">${b.phase === "monster" || battleUi.busy ? `${m.name}'s turn…` : "Your turn. Pick an action."}</div>
+    <div class="actions">${html}
+      <button class="danger" data-a="flee" ${myTurn ? "" : "disabled"}>🏃 Run away</button></div>`;
+  menu.querySelectorAll("[data-a]").forEach(btn => { btn.onclick = () => onHeroAction(btn.dataset.a); });
 }
+
+// Floating numbers and shakes for what just happened. Shown one after another.
+function playBattleFx() {
+  const queue = battleFxQueue;
+  battleFxQueue = [];
+  queue.forEach((f, i) => later(i * 220, () => {
+    const box = battlePart(f.side === "hero" ? "youFx" : "foeFx");
+    const sprite = battlePart(f.side === "hero" ? "youSprite" : "foeSprite");
+    if (!box) return;
+    const pop = el(`<div class="bt-pop pop-${f.kind}">${f.text}</div>`);
+    pop.style.marginLeft = `${[0, -36, 36][i % 3]}px`; // spread out numbers that land together
+    box.appendChild(pop);
+    setTimeout(() => pop.remove(), 1100);
+    if (["hit", "crit", "burn", "poison"].includes(f.kind)) restartAnim(sprite, "hurt");
+  }));
+}
+
+function restartAnim(node, cls) {
+  if (!node) return;
+  node.classList.remove(cls);
+  void node.offsetWidth; // restart the CSS animation
+  node.classList.add(cls);
+}
+
+function onHeroAction(action) {
+  if (battleUi.busy) return;
+  const b = state.battle;
+  if (!b || b.result) return;
+  if (action !== "flee" && action !== "wait") restartAnim(battlePart("youSprite"), "lunge");
+  if (!battleAction(action)) return;
+  renderBattle();
+  playBattleFx();
+  if (state.battle && !state.battle.result && state.battle.phase === "monster") {
+    battleUi.busy = true;
+    renderBattleMenu();
+    later(950, runMonsterTurn);
+  }
+}
+
+// The monster's turn: show what it's doing, give you a chance to dodge or parry, then let it land.
+function runMonsterTurn() {
+  const b = state.battle;
+  if (!b || b.result || b.phase !== "monster") { battleUi.busy = false; if (b) renderBattle(); return; }
+  battleUi.busy = true;
+  const p = monsterChooseMove();
+  renderBattle();
+  if (p.kind === "attack") startReaction(p);
+  else {
+    showPromptBanner(p.text);
+    later(1100, () => finishMonsterTurn(null));
+  }
+}
+
+function showPromptBanner(text) {
+  const prompt = battlePart("prompt");
+  prompt.hidden = false;
+  prompt.className = "bt-prompt banner";
+  prompt.innerHTML = `<div class="bt-prompt-card"><div class="bt-prompt-title">${text}</div></div>`;
+}
+
+// The dodge/parry prompt. It opens after a short random wind-up, then stays open for reactionWindow() ms.
+function startReaction(p) {
+  const b = state.battle;
+  const m = b.monster;
+  const prompt = battlePart("prompt");
+  const windowMs = reactionWindow();
+  const title = p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
+  prompt.hidden = false;
+  prompt.className = "bt-prompt wait";
+  prompt.innerHTML = `
+    <div class="bt-prompt-card">
+      <div class="bt-prompt-title">${title}</div>
+      <div class="bt-timer"><div class="bt-timer-fill" data-k="timerFill"></div></div>
+      <div class="bt-prompt-state" data-k="promptState">Get ready…</div>
+      <div class="bt-react">
+        <button type="button" class="react-btn" data-r="dodge">💨 Dodge <kbd>D</kbd></button>
+        <button type="button" class="react-btn" data-r="parry" ${p.heavy ? `disabled title="Heavy attacks are too strong to parry"` : ""}>⚔️ Parry <kbd>P</kbd></button>
+      </div>
+      ${p.heavy ? `<div class="small">Too heavy to parry: dodge it!</div>` : ""}
+    </div>`;
+  restartAnim(battlePart("foeSprite"), "winding");
+
+  const r = { open: false, done: false, p };
+  battleUi.reaction = r;
+  prompt.querySelectorAll("[data-r]").forEach(btn => {
+    btn.addEventListener("pointerdown", e => { e.preventDefault(); pressReaction(btn.dataset.r); });
+    btn.addEventListener("click", e => { if (e.detail === 0) pressReaction(btn.dataset.r); }); // keyboard Enter/Space
+  });
+
+  const wait = REACTION.waitMin + Math.random() * (REACTION.waitMax - REACTION.waitMin);
+  later(wait, () => {
+    if (r.done) return;
+    r.open = true;
+    prompt.className = "bt-prompt now";
+    battlePart("promptState").textContent = "NOW!";
+    const fill = battlePart("timerFill");
+    fill.style.transition = "none";
+    fill.style.width = "100%";
+    void fill.offsetWidth;
+    fill.style.transition = `width ${windowMs}ms linear`;
+    fill.style.width = "0%";
+    later(windowMs, () => { if (!r.done) settleReaction(null, "Too slow!"); });
+  });
+}
+
+function pressReaction(kind) {
+  const r = battleUi.reaction;
+  if (!r || r.done) return;
+  if (kind === "parry" && r.p.heavy) return;
+  if (!r.open) return settleReaction("early", "Too early!");
+  settleReaction(kind, kind === "dodge" ? "Dodge!" : "Parry!");
+}
+
+function settleReaction(reaction, text) {
+  const r = battleUi.reaction;
+  r.done = true;
+  battleUi.reaction = null;
+  const prompt = battlePart("prompt");
+  prompt.className = `bt-prompt ${reaction === "dodge" || reaction === "parry" ? "good" : "bad"}`;
+  battlePart("promptState").textContent = text;
+  const fill = battlePart("timerFill");
+  fill.style.width = getComputedStyle(fill).width;
+  fill.style.transition = "none";
+  later(450, () => finishMonsterTurn(reaction));
+}
+
+function finishMonsterTurn(reaction) {
+  const prompt = battlePart("prompt");
+  prompt.hidden = true;
+  restartAnim(battlePart("foeSprite"), "lunge");
+  monsterResolve(reaction);
+  battleUi.busy = false;
+  renderBattle();
+  playBattleFx();
+}
+
+// Keyboard: D to dodge, P to parry.
+if (typeof document !== "undefined") document.addEventListener("keydown", e => {
+  if (!battleUi.reaction || e.repeat) return;
+  const k = e.key.toLowerCase();
+  if (k === "d") { e.preventDefault(); pressReaction("dodge"); }
+  if (k === "p") { e.preventDefault(); pressReaction("parry"); }
+});
 
 // ---------- Skills panel ----------
 
