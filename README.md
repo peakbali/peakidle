@@ -32,3 +32,5 @@ Your progress saves automatically in your browser.
 - `style.css`: colors and layout
 - `game.js`: all the game rules. Ores, gear types, stats, elements, monsters, spawn timer, prices, upgrades, Souls and attributes are at the top, easy to tweak.
 - `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
+
+When you change `style.css`, `game.js` or `menu.js`, raise the `?v=` number after their names in `index.html` (for example `?v=10` to `?v=11`). That makes phones and browsers load the new files instead of an old saved copy.
