@@ -388,13 +388,31 @@ button.glow { animation: afford-glow 0.9s ease-out 2; }
 }
 
 /* ---------- Mine ---------- */
+/* Each mine row: dwarf top left, ore name under it, a big ore button on the
+   right, then the miner numbers and the hire button across the whole row. */
+.ore-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "dwarf btn"
+    "title btn"
+    "stats stats"
+    "hire  hire";
+  column-gap: 10px;
+  align-items: center;
+}
+.ore-card .ore-dwarf { grid-area: dwarf; container-type: inline-size; min-width: 0; }
+.ore-card .ore-btn { grid-area: btn; align-self: start; }
+.ore-card .ore-title { grid-area: title; align-self: end; margin-top: 4px; }
+.ore-card .ore-stats { grid-area: stats; margin-top: 6px; }
+.ore-card .ore-hire { grid-area: hire; }
 .ore-btn {
-  width: 64px;
-  height: 64px;
+  width: 128px;
+  height: 128px;
   padding: 0;
   --btn-bg: #1d1612;
 }
-.ore-top { position: relative; }
 .float-num {
   position: absolute;
   z-index: 3;
@@ -1021,7 +1039,6 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
 /* ---------- Dwarf miners (Mine panel) ----------
    One pixel-art dwarf per opened mine, drawn by dwarves.js. The mining moves
    themselves are built in dwarves.js; here are the sizes and the sleeping look. */
-.ore-top { flex-wrap: nowrap; justify-content: flex-start; margin-bottom: 6px; }
 .dwarf-box { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .dwarf { flex: none; width: 84px; height: 66px; --dur: 1.6s; }
 .dw-svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -1066,17 +1083,23 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
   .dwarf { width: 70px; height: 55px; }
 }
 
-/* Desktop columns are narrow: a slightly smaller ore button and dwarf leave room for the speed text */
+/* Desktop columns are narrow: a slightly smaller ore button and dwarf */
 @media (min-width: 701px) {
-  .ore-top .ore-btn { width: 54px; height: 54px; font-size: 24px; }
-  .ore-top { gap: 6px; }
+  .ore-card .ore-btn { width: 108px; height: 108px; }
+  .ore-card .ore-btn .ore-art { width: 72px; height: 72px; }
+  .ore-card { column-gap: 8px; }
   .dwarf-box { gap: 6px; }
   .dwarf { width: 72px; height: 57px; }
 }
 
+/* Not much room beside the dwarf (desktop, small phones): speed text goes under it */
+@container (max-width: 170px) {
+  .dwarf-box { flex-direction: column; align-items: flex-start; gap: 2px; }
+}
+
 /* Pixel-art ore pictures (drawn in ores-art.js). Sized to the text around them. */
 .ore-art { width: 1.25em; height: 1.25em; vertical-align: -0.28em; image-rendering: pixelated; flex: none; }
-.ore-btn .ore-art { width: 40px; height: 40px; vertical-align: middle; display: block; margin: auto; }
+.ore-btn .ore-art { width: 80px; height: 80px; vertical-align: middle; display: block; margin: auto; }
 .ore-btn:hover:not(:disabled) .ore-art { filter: brightness(1.12); }
 
 /* ---------- Battle screen in the forge style ----------
