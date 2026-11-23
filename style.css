@@ -262,3 +262,99 @@ button.primary .el { color: #1d1b19; background: rgba(0, 0, 0, 0.12); border-col
 .souls-preview .total { border-top: 1px solid var(--line); padding-top: 4px; font-weight: 700; color: #c9b6ff; }
 .confirm { margin-top: 10px; padding: 10px; border: 1px solid var(--bad); border-radius: 8px; display: grid; gap: 6px; background: rgba(217, 96, 76, 0.08); }
 .confirm .small b { color: var(--text); }
+
+/* ---------- Phone menu ----------
+   Only used on screens 700px wide or less. On bigger screens these parts are
+   hidden and all 7 panels show in one row as before. */
+.menu-btn, .dashboard, .tabbar { display: none; }
+
+@media (max-width: 700px) {
+  /* Room at the bottom so the tab bar never covers anything. */
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+  header { padding: 10px 12px; }
+  header h1 { font-size: 19px; }
+  .menu-btn { display: inline-block; font-size: 14px; padding: 6px 10px; }
+  body[data-view="menu"] .menu-btn { display: none; }
+  .header-right { gap: 4px 12px; }
+  .souls-bar .small { display: none; }
+
+  /* One panel at a time: hide every panel except the one that is open. */
+  main { padding: 10px; }
+  body[data-view] .panel { display: none; }
+  body[data-view="mine"]      #panel-mine,
+  body[data-view="forge"]     #panel-forge,
+  body[data-view="hero"]      #panel-hero,
+  body[data-view="adventure"] #panel-adventure,
+  body[data-view="merchant"]  #panel-merchant,
+  body[data-view="upgrades"]  #panel-upgrades,
+  body[data-view="souls"]     #panel-souls { display: block; }
+
+  /* Main menu: a grid of big tiles. */
+  body[data-view="menu"] .dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px 10px;
+  }
+  body[data-view="menu"] main { display: none; }
+  .dash-tile {
+    position: relative;
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+    text-align: left;
+    padding: 14px 12px;
+    min-height: 100px;
+    border-radius: 12px;
+    background: rgba(42, 39, 36, 0.88);
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--line);
+  }
+  .dash-tile:active { transform: scale(0.97); }
+  .dash-tile:last-of-type:nth-child(odd) { grid-column: 1 / -1; }
+  .dash-icon { font-size: 30px; line-height: 1.1; }
+  .dash-name { font-size: 17px; font-weight: 700; color: var(--accent); }
+  .dash-blurb { font-size: 12px; color: var(--muted); }
+  .dash-badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 11px; font-weight: 700; color: #fff;
+    background: var(--bad); border-radius: 999px; padding: 2px 8px;
+  }
+  .dash-badge[hidden] { display: none; }
+
+  /* Tab bar fixed to the bottom of the screen. */
+  .tabbar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 5;
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom));
+    background: rgba(29, 27, 25, 0.94);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line);
+  }
+  .tab-item {
+    position: relative;
+    display: grid; justify-items: center; gap: 1px;
+    background: transparent; border: none; border-radius: 8px;
+    padding: 4px 0; min-width: 0; color: var(--muted);
+  }
+  .tab-item:hover:not(:disabled) { background: transparent; }
+  .tab-icon { font-size: 20px; line-height: 1.2; }
+  .tab-label { font-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tab-item.active { color: var(--accent); background: rgba(232, 145, 58, 0.14); }
+  .tab-item.active:hover { background: rgba(232, 145, 58, 0.14); }
+  .tab-item.has-badge::after {
+    content: ""; position: absolute; top: 4px; right: calc(50% - 16px);
+    width: 8px; height: 8px; border-radius: 50%; background: var(--bad);
+  }
+
+  /* Messages and the reset button sit above the tab bar. */
+  footer { padding: 0 12px 12px; }
+}
+
+/* Very small phones: slightly smaller tab labels so they fit. */
+@media (max-width: 360px) {
+  .tab-label { font-size: 8.5px; }
+}

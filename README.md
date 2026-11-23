@@ -31,3 +31,4 @@ Your progress saves automatically in your browser.
 - `index.html`: the page layout
 - `style.css`: colors and layout
 - `game.js`: all the game rules. Ores, gear types, stats, elements, monsters, spawn timer, prices, upgrades, Souls and attributes are at the top, easy to tweak.
+- `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
