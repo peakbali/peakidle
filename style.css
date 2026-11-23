@@ -162,7 +162,7 @@ header.hud {
   background: rgba(10, 7, 5, 0.7);
   box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.55), inset -2px -2px 0 rgba(255, 220, 180, 0.07), 0 0 0 2px #3a2e25;
 }
-.ore-chip[hidden] { display: none; }
+.ore-chip.locked, .ore-chip .ore-short { display: none; }
 .chip .px-slot { width: 20px; height: 20px; }
 .ore-chip .ore-art { width: 20px; height: 20px; vertical-align: middle; }
 .chip-coins { color: #ffd76a; font-size: 23px; }
@@ -768,23 +768,41 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
   /* Room at the bottom so the tab bar never covers anything. */
   body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
 
-  /* Header: logo, gear and (on panels) the Menu button on the first line;
-     your coins, Souls and ore on a second line that you can swipe sideways. */
-  header.hud { flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px 6px; }
-  .logo { flex: 1; font-size: 29px; }
-  .logo .px-slot { width: 26px; height: 26px; }
+  /* Header on phones, two parts that always fit on screen (no swiping):
+     top line: (Menu) logo ... coins, Souls, gear
+     below it: all 10 ores in a fixed grid of 2 rows x 5 columns.
+     .hud-chips "melts away" (display: contents) so coins, Souls and the ore
+     grid can be placed on their own around the logo and gear. */
+  header.hud { flex-wrap: wrap; gap: 6px; padding: 7px 10px 7px; }
+  .logo { flex: 1 1 auto; min-width: 0; font-size: 27px; gap: 6px; }
+  .logo > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .logo .px-slot { width: 24px; height: 24px; }
+  .hud-chips { display: contents; }
+  .chip-coins, .chip-souls { order: 1; }
   .settings { order: 2; }
-  .icon-btn { width: 36px; height: 36px; }
-  .hud-chips { order: 3; flex-basis: 100%; justify-content: flex-start; gap: 7px; padding: 3px 3px 4px; }
-  /* fade at the right edge hints that you can swipe for more */
-  .hud-chips { -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
-  .chip, .ore-chip { font-size: 19px; padding: 2px 7px 2px 4px; }
+  .icon-btn { width: 34px; height: 34px; }
+  .icon-btn .px-slot { width: 22px; height: 22px; }
+  .chip { font-size: 19px; padding: 2px 6px 2px 4px; gap: 4px; }
   .chip-coins { font-size: 21px; }
-  .chip .px-slot, .ore-chip .ore-art { width: 18px; height: 18px; }
+  .chip .px-slot { width: 18px; height: 18px; }
+  .ore-bar {
+    order: 3; flex: 0 0 100%;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px;
+  }
+  .ore-chip, .ore-chip.locked {
+    display: flex; min-width: 0; justify-content: flex-start;
+    gap: 2px; padding: 2px 3px; font-size: 17px; letter-spacing: -0.02em;
+  }
+  .ore-chip .ore-art { width: 15px; height: 15px; flex: none; }
+  .ore-chip .ore-long { display: none; }
+  .ore-chip .ore-short { display: inline; overflow: hidden; text-overflow: ellipsis; }
+  /* Not opened yet: a dim, grey slot so the grid keeps its shape. */
+  .ore-chip.locked { opacity: 0.4; filter: grayscale(1); color: var(--muted, #9a8a7a); }
   .menu-btn { display: inline-flex; align-items: center; gap: 6px; font-size: 18px; padding: 3px 9px 3px 6px; }
   .menu-btn .px-slot { width: 20px; height: 20px; }
   body[data-view="menu"] .menu-btn { display: none; }
-  body:not([data-view="menu"]) .logo { font-size: 25px; }
+  /* On panels the Menu button needs the room, so only the logo's pick-axe stays. */
+  body:not([data-view="menu"]) .logo > span:last-child { display: none; }
 
   /* One panel at a time: hide every panel except the one that is open. */
   main { padding: 14px 12px 10px; }
@@ -878,6 +896,14 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
 }
 
 /* Very small phones: slightly smaller tab labels so they fit. */
+@media (max-width: 359px) {
+  /* Too narrow for the name: only the pick-axe logo stays, so the top line fits. */
+  .logo > span:last-child { display: none; }
+  .menu-btn { padding: 3px 6px; }
+  .menu-btn > span:last-child { display: none; }
+  .ore-chip, .ore-chip.locked { font-size: 15px; padding: 2px; }
+  .ore-chip .ore-art { width: 13px; height: 13px; }
+}
 @media (max-width: 360px) {
   .tab-label { font-size: 12px; }
   .dash-tile { grid-template-columns: 40px 1fr; }
