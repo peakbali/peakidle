@@ -7,7 +7,7 @@ A small idle game you play in your browser. Mine ore, smith swords and armor, se
 1. **Mine**: click an ore (start with copper) to dig it up.
 2. **Forge**: when you have enough ore, smith a sword (the only weapon) or a piece of armor (helmet, chestplate, gloves, boots, shield). Every piece can be made from every ore, and better ores make stronger gear.
 3. **Sell** your gear for coins (sold gear is gone for good), or **equip** it.
-4. **Hero**: equipped gear raises your stats: HP, attack, defense, agility and luck. Heavy armor gives more defense, light armor more agility. Luck is your chance of a critical hit (double damage).
+4. **Hero**: equipped gear raises your stats: HP, attack, defense, agility and luck. Heavy armor gives more defense, light armor more agility. Luck is your chance of a critical hit (double damage). Tap an equipment slot to pick what to wear from your bag.
 5. **Adventure**: a random monster appears every 15 seconds, up to 5 at a time, even while the game is closed (the timer pauses while 5 are waiting). Each one has a random element, so its weakness and its essence drop are random too. Your **danger level** decides how strong they are: monsters are your level or one below. Below them waits a fixed **boss**. Beat it to raise your danger level, which brings stronger monsters and the next boss. There are 10 danger levels: Mossy Tunnels, Deep Mine, Molten Halls, Sky Peak, Crystal Caverns, Sunken Ruins, Frostfang Tundra, Ember Wastes, Shadow Abyss and Starfall Crown. The higher ones need gear from the newer ores.
    - Battles are turn based and fill the whole screen. Each turn you **Attack**, **Guard** (take much less damage and no status effects, great when a monster winds up a heavy attack), cast a skill or **Run away**.
    - When a monster attacks, a prompt pops up: tap **Dodge** (avoid the hit) or **Parry** (take 30% and strike back) before its timer runs out. The prompt pops up right away at a random spot on the screen, so be quick. Too late and the hit lands. Keys: D and P.
@@ -37,6 +37,7 @@ Your progress saves automatically in your browser.
 - `dwarves.js`: the little animated dwarf miners in the Mine panel, one per ore, drawn in code as pixel art. Their looks, tools and mining moves are at the top, easy to tweak.
 - `ores-art.js`: the pixel-art ore pictures (Mine buttons, header, Forge tabs), drawn in code. Each ore has its own little drawing near the bottom of the file.
 - `menu.js`: the phone menu (main menu tiles and bottom tab bar). Only shows on screens 700px wide or less.
+- `gear-art.js`: the pixel-art sword and armor pictures, colored in each ore's color, drawn in code from little text maps.
 - `icons.js`: the pixel-art icons for the menu, tab bar, panel titles and top bar (pickaxe, anvil, shield, swords, scroll, arrow, ghost, coin, gear, house), drawn in code from little text maps.
 - `fonts/`: the Jersey 15 pixel font used for titles and numbers (free, SIL Open Font License in `fonts/OFL.txt`).
 

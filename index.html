@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=26">
+  <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -63,7 +63,7 @@
     <!-- Hero: stats and the gear you're wearing -->
     <section class="panel" id="panel-hero" data-panel="hero">
       <h2>Hero</h2>
-      <details class="hint"><summary>How it works</summary><p>Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility.</p></details>
+      <details class="hint"><summary>How it works</summary><p>Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility. Tap an equipment slot to pick what to wear from your bag.</p></details>
       <button class="profile-card" type="button" data-edit-profile title="Change your hero's name and look">
         <span class="profile-portrait" data-profile-portrait></span>
         <span class="profile-text"><span class="profile-name num" data-profile-name>Hero</span><span class="small">Tap to change your look</span></span>
@@ -122,11 +122,15 @@
   <!-- Appearance editor: your hero's name and look (filled in by avatar.js) -->
   <div id="avatar-editor" class="av-overlay" hidden></div>
 
-  <script src="icons.js?v=26"></script>
-  <script src="avatar.js?v=26"></script>
-  <script src="ores-art.js?v=26"></script>
-  <script src="dwarves.js?v=26"></script>
-  <script src="game.js?v=26"></script>
-  <script src="menu.js?v=26"></script>
+  <!-- Gear picker: choose what to wear in one equipment slot (filled in by game.js) -->
+  <div id="gear-picker" class="av-overlay" hidden></div>
+
+  <script src="icons.js?v=27"></script>
+  <script src="avatar.js?v=27"></script>
+  <script src="ores-art.js?v=27"></script>
+  <script src="gear-art.js?v=27"></script>
+  <script src="dwarves.js?v=27"></script>
+  <script src="game.js?v=27"></script>
+  <script src="menu.js?v=27"></script>
 </body>
 </html>

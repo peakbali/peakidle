@@ -759,6 +759,11 @@ function statsText(stats) {
 
 function bagCount(r) { return state.items[r.id] || 0; }
 
+// The pixel picture of an item, in its ore's color (see gear-art.js). Falls back to the emoji.
+function gearIcon(r) {
+  return (typeof gearArtSVG === "function" && gearArtSVG(r.type, r.ore)) || r.icon;
+}
+
 // ---------- Skill rules ----------
 
 function skillLevel(id) { return state.skills[id] || 0; }
@@ -1518,7 +1523,7 @@ function buildForge() {
     const card = el(`
       <div class="card item-row">
         <div class="item-side">
-          <div class="item-icon" aria-hidden="true">${r.icon}</div>
+          <div class="item-icon" aria-hidden="true">${gearIcon(r)}</div>
           <button data-k="equip" class="equip-btn">Equip</button>
         </div>
         <div class="item-main">
@@ -1561,23 +1566,124 @@ function buildHero() {
     statsBox.appendChild(row);
   }
 
+  // Equipment: one framed square per slot, laid out around the body like a paper doll.
+  // Tap a square to pick what to wear there from your bag (or to take it off).
   const slotsBox = document.getElementById("hero-slots");
   slotsBox.innerHTML = "";
+  slotsBox.className = "eq-grid";
   refs.slots = {};
   for (const slot of SLOTS) {
-    const row = el(`
-      <div class="slot">
-        <div>
-          <div class="small">${slot.name}</div>
-          <div class="name" data-k="item"></div>
-          <div class="small" data-k="itemStats"></div>
-        </div>
-        <button data-k="remove">Unequip</button>
-      </div>`);
-    row.querySelector('[data-k="remove"]').onclick = () => unequip(slot.id);
-    refs.slots[slot.id] = row;
-    slotsBox.appendChild(row);
+    const type = GEAR_TYPES.find(t => t.slot === slot.id);
+    const btn = el(`
+      <button type="button" class="eq-slot eq-${slot.id}" data-slot="${slot.id}">
+        <span class="eq-frame"><span class="eq-art" data-k="art"></span></span>
+        <span class="eq-label" data-k="label"></span>
+      </button>`);
+    btn.dataset.empty = gearArtEmpty(type);
+    btn.onclick = () => openGearPicker(slot.id);
+    refs.slots[slot.id] = btn;
+    slotsBox.appendChild(btn);
   }
+  refs.slotsShown = {};
+}
+
+// A grey picture of the gear type, shown faintly in an empty slot.
+function gearArtEmpty(type) {
+  return (typeof gearArtSVG === "function" && gearArtSVG(type.id, "")) || type.icon;
+}
+
+function renderEquipSlots() {
+  for (const slot of SLOTS) {
+    const btn = refs.slots[slot.id];
+    const item = state.equipped[slot.id];
+    const r = item && recipeById[item.id];
+    const type = GEAR_TYPES.find(t => t.slot === slot.id);
+    const have = RECIPES.some(x => x.slot === slot.id && bagCount(x) > 0);
+    const key = `${r ? r.id : ""}|${have}`;
+    if (refs.slotsShown[slot.id] === key) continue; // only redraw when something changed
+    refs.slotsShown[slot.id] = key;
+    btn.classList.toggle("empty", !r);
+    btn.classList.toggle("can-equip", !r && have);
+    btn.querySelector('[data-k="art"]').innerHTML = r ? gearIcon(r) : btn.dataset.empty;
+    set(btn, "label", r ? oreById[r.ore].name : type.name);
+    btn.title = r ? `${r.name}: ${statsText(r.stats)}. Tap to change.`
+      : have ? `${type.name}: empty. Tap to pick one from your bag.` : `${type.name}: empty. Smith one in the Forge.`;
+    btn.setAttribute("aria-label", r ? `${slot.name}: ${r.name}` : `${slot.name}: empty`);
+  }
+  if (gearPickerSlot) renderGearPicker();
+}
+
+// ---------- Gear picker: choose what to wear in one slot ----------
+
+let gearPickerSlot = null;
+let gearPickerShown = "";
+
+function openGearPicker(slotId) {
+  gearPickerSlot = slotId;
+  gearPickerShown = "";
+  document.getElementById("gear-picker").hidden = false;
+  document.body.classList.add("in-editor");
+  renderGearPicker();
+}
+
+function closeGearPicker() {
+  gearPickerSlot = null;
+  const box = document.getElementById("gear-picker");
+  box.hidden = true;
+  box.innerHTML = "";
+  document.body.classList.remove("in-editor");
+}
+
+function renderGearPicker() {
+  const slotId = gearPickerSlot;
+  const box = document.getElementById("gear-picker");
+  const type = GEAR_TYPES.find(t => t.slot === slotId);
+  const worn = state.equipped[slotId] && recipeById[state.equipped[slotId].id];
+  // Strongest ore first.
+  const choices = RECIPES.filter(r => r.slot === slotId && bagCount(r) > 0).reverse();
+  const key = `${slotId}|${worn ? worn.id : ""}|${choices.map(r => r.id + ":" + bagCount(r)).join(",")}`;
+  if (key === gearPickerShown) return; // nothing changed
+  gearPickerShown = key;
+
+  const plural = type.name.toLowerCase() + (type.id === "gloves" || type.id === "boots" ? "" : "s");
+  const row = (r, worn) => `
+    <div class="gp-item${worn ? " worn" : ""}">
+      <span class="gp-icon">${gearIcon(r)}</span>
+      <span class="gp-text">
+        <span class="gp-name">${r.name}${worn ? ` <span class="tag">Worn</span>` : ` <span class="small">×${fmt(bagCount(r))}</span>`}</span>
+        <span class="stats-line">${statsText(r.stats)}</span>
+      </span>
+      ${worn ? `<button type="button" data-unequip>Unequip</button>` : `<button type="button" class="primary" data-equip="${r.id}">Equip</button>`}
+    </div>`;
+  box.innerHTML = `
+    <div class="av-card gp-card" role="dialog" aria-modal="true" aria-label="Choose ${type.name.toLowerCase()}">
+      <div class="gp-head">
+        <h3>${type.name}</h3>
+        <button type="button" class="gp-close" data-close aria-label="Close">✕</button>
+      </div>
+      ${worn ? row(worn, true) : ""}
+      <div class="small gp-sub">${choices.length ? "In your bag:" : ""}</div>
+      <div class="gp-list">
+        ${choices.map(r => row(r, false)).join("") ||
+          `<div class="gp-none">You have no ${plural} in your bag.<br>Smith one in the Forge first.
+            <div class="buttons"><button type="button" data-go="forge" data-close>Go to the Forge</button></div></div>`}
+      </div>
+    </div>`;
+  box.querySelectorAll("[data-equip]").forEach(b => { b.onclick = () => { equip(b.dataset.equip); closeGearPicker(); }; });
+  const un = box.querySelector("[data-unequip]");
+  if (un) un.onclick = () => { unequip(slotId); closeGearPicker(); };
+  box.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeGearPicker));
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", e => {
+    const box = document.getElementById("gear-picker");
+    if (box && !box.hidden && e.target === box) closeGearPicker(); // tap outside the card
+  });
+  document.addEventListener("keydown", e => {
+    const box = document.getElementById("gear-picker");
+    if (e.key === "Escape" && box && !box.hidden) closeGearPicker();
+  });
 }
 
 function elementTag(elementId) {
@@ -1751,7 +1857,7 @@ function buildBattleScreen() {
           <div class="bt-fx" data-k="foeFx"></div>
         </div>
         <div class="bt-spot you">
-          <div class="bt-sprite bt-hero" data-k="youSprite">${avatarSVG(state.profile, "full")}${weapon ? `<span class="bt-weapon">${weapon.icon}</span>` : ""}</div>
+          <div class="bt-sprite bt-hero" data-k="youSprite">${avatarSVG(state.profile, "full")}${weapon ? `<span class="bt-weapon">${gearIcon(weapon)}</span>` : ""}</div>
           <div class="bt-pad"></div>
           <div class="bt-fx" data-k="youFx"></div>
         </div>
@@ -2506,15 +2612,7 @@ function render() {
     set(refs.stats[st.id], "bonus", parts.length ? `(${parts.join(", ")})` : "");
   }
   renderSouls();
-  for (const slot of SLOTS) {
-    const row = refs.slots[slot.id];
-    const item = state.equipped[slot.id];
-    const r = item && recipeById[item.id];
-    set(row, "item", r ? `${r.icon} ${r.name}` : "Empty");
-    set(row, "itemStats", r ? statsText(r.stats) : "Smith something in the Forge and press Equip.");
-    row.classList.toggle("empty", !r);
-    row.querySelector('[data-k="remove"]').hidden = !r;
-  }
+  renderEquipSlots();
   glowAffordable();
 }
 
