@@ -1963,7 +1963,7 @@ function renderBattleMenu() {
       const cost = skillGrade(sk).mana;
       const st = sk.status ? ` ${STATUS[sk.status].icon}` : "";
       return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${!myTurn || b.mana < cost ? "disabled" : ""}
-        title="${sk.desc}">${elementById[sk.element].icon} ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>`;
+        title="${sk.desc}"><span class="sk-mini">${skillArtSVG(sk.id)}</span> ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>`;
     }).join("");
     html = `
       <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack</button>
@@ -2130,49 +2130,48 @@ if (typeof document !== "undefined") document.addEventListener("keydown", e => {
 function buildMerchant() {
   refs.skillSlots = [];
   refs.skills = {};
+  refs.skillHave = {};
+  // Your 3 equipped skills: one row of 3, each with a big picture.
   const slotsBox = document.getElementById("skill-slots");
   slotsBox.innerHTML = "";
   for (let i = 0; i < BATTLE.skillSlots; i++) {
-    const row = el(`
-      <div class="slot">
-        <div>
-          <div class="small">Skill slot ${i + 1}</div>
-          <div class="name" data-k="skill"></div>
-          <div class="small" data-k="info"></div>
-        </div>
-        <button data-k="remove">Remove</button>
+    const slot = el(`
+      <div class="sk-slot">
+        <div class="eq-frame sk-frame"><div class="sk-art" data-k="art"></div></div>
+        <div class="sk-name" data-k="skill"></div>
+        <div class="sk-meta" data-k="info"></div>
+        <button class="sk-btn" data-k="remove">Remove</button>
       </div>`);
-    row.querySelector('[data-k="remove"]').onclick = () => unequipSkill(i);
-    refs.skillSlots.push(row);
-    slotsBox.appendChild(row);
+    slot.querySelector('[data-k="remove"]').onclick = () => unequipSkill(i);
+    refs.skillSlots.push(slot);
+    slotsBox.appendChild(slot);
   }
 
+  // The shop: one row of 3 per element (low, mid, high), with your essences beside the title.
   const box = document.getElementById("skills");
   box.innerHTML = "";
   for (const e of ELEMENTS) {
-    box.appendChild(el(`<h3>${e.icon} ${e.name} skills</h3>`));
+    const head = el(`<div class="sk-head"><h3>${e.icon} ${e.name} skills</h3><span class="sk-have" data-k="have"></span></div>`);
+    refs.skillHave[e.id] = head;
+    box.appendChild(head);
+    const row = el(`<div class="sk-row"></div>`);
     for (const sk of SKILLS) {
       if (sk.element !== e.id) continue;
       const g = skillGrade(sk);
       const card = el(`
-        <div class="card skill-card">
-          <div class="row">
-            <span class="name">${e.icon} ${sk.name} <span class="tag" data-k="lvl" hidden></span></span>
-            <span class="small">${g.name} · 💧 ${g.mana} mana</span>
-          </div>
-          <div class="small">${sk.desc}</div>
-          <div class="stats-line" data-k="effect"></div>
-          <div class="buttons">
-            <button class="primary" data-k="buy"></button>
-            <button data-k="equip">Equip</button>
-            <span class="have" data-k="have"></span>
-          </div>
+        <div class="sk-card el-${e.id}">
+          <div class="eq-frame sk-frame"><div class="sk-art">${skillArtSVG(sk.id)}</div></div>
+          <div class="sk-name">${sk.name}</div>
+          <div class="sk-meta" data-k="meta"></div>
+          <button class="primary sk-btn" data-k="buy"></button>
+          <button class="sk-btn" data-k="equip">Equip</button>
         </div>`);
       card.querySelector('[data-k="buy"]').onclick = () => buySkill(sk.id);
       card.querySelector('[data-k="equip"]').onclick = () => equipSkill(sk.id);
       refs.skills[sk.id] = card;
-      box.appendChild(card);
+      row.appendChild(card);
     }
+    box.appendChild(row);
   }
 }
 
@@ -2189,37 +2188,45 @@ function skillEffectText(sk, level) {
   return parts.join(", ");
 }
 
+// "Lv 3 💧1": level (or grade) and mana cost, each part kept on one line.
+function skillMetaHTML(first, mana) {
+  return `<span class="nw">${first}</span> <span class="nw">💧${mana}</span>`;
+}
+
 function renderMerchant() {
   state.skillSlots.forEach((id, i) => {
-    const row = refs.skillSlots[i];
+    const slot = refs.skillSlots[i];
     const sk = id && skillById[id];
-    set(row, "skill", sk ? `${elementById[sk.element].icon} ${sk.name} (Lv ${skillLevel(id)})` : "Empty");
-    set(row, "info", sk ? `💧 ${skillGrade(sk).mana} mana · ${skillEffectText(sk, skillLevel(id))}` : "Buy a skill below and press Equip.");
-    row.classList.toggle("empty", !sk);
-    row.querySelector('[data-k="remove"]').hidden = !sk;
+    const art = slot.querySelector('[data-k="art"]');
+    if (art.dataset.id !== (id || "")) {
+      art.dataset.id = id || "";
+      art.innerHTML = sk ? skillArtSVG(sk.id) : "";
+    }
+    set(slot, "skill", sk ? sk.name : "Empty");
+    const info = sk ? skillMetaHTML(`Lv ${skillLevel(id)}`, skillGrade(sk).mana) : "Pick one below";
+    const infoEl = slot.querySelector('[data-k="info"]');
+    if (infoEl.innerHTML !== info) infoEl.innerHTML = info;
+    slot.title = sk ? `${sk.desc} Now: ${skillEffectText(sk, skillLevel(id))}.` : "";
+    slot.className = "sk-slot" + (sk ? ` el-${sk.element}` : " empty");
+    slot.querySelector('[data-k="remove"]').hidden = !sk;
   });
+  for (const e of ELEMENTS) set(refs.skillHave[e.id], "have", `You have ${fmt(state.drops[e.id] || 0)} ${e.icon}`);
   const slotsFull = !state.skillSlots.includes(null);
   for (const sk of SKILLS) {
     const card = refs.skills[sk.id];
     const level = skillLevel(sk.id);
     const cost = skillNextCost(sk);
     const e = elementById[sk.element];
-    const lvlTag = card.querySelector('[data-k="lvl"]');
-    lvlTag.hidden = level === 0;
-    set(card, "lvl", `Lv ${level}`);
-    set(card, "effect", level > 0
-      ? `Now: ${skillEffectText(sk, level)}`
-      : skillEffectText(sk, 1));
+    const meta = skillMetaHTML(level > 0 ? `Lv ${level}` : skillGrade(sk).name, skillGrade(sk).mana);
+    const metaEl = card.querySelector('[data-k="meta"]');
+    if (metaEl.innerHTML !== meta) metaEl.innerHTML = meta;
+    // The full description and numbers show when you hover (or long-press) the card.
+    const tip = `${sk.desc} ${level > 0 ? "Now: " : ""}${skillEffectText(sk, Math.max(1, level))}.`;
+    if (card.title !== tip) card.title = tip;
     const buy = card.querySelector('[data-k="buy"]');
-    const label = `${level > 0 ? `Level up to ${level + 1}` : "Buy"} for ${fmt(cost)} ${e.icon}`;
-    if (buy.textContent !== label) buy.textContent = label;
-    const have = state.drops[sk.element] || 0;
-    buy.disabled = have < cost;
-    // How many essences of this element you have, green if enough, red if not.
-    set(card, "have", `you have ${fmt(have)} ${e.icon}`);
-    const haveEl = card.querySelector('[data-k="have"]');
-    haveEl.classList.toggle("enough", have >= cost);
-    haveEl.classList.toggle("short", have < cost);
+    const label = `${level > 0 ? "Level up" : "Buy"} <span class="nw">${fmt(cost)} ${e.icon}</span>`;
+    if (buy.dataset.label !== label) { buy.dataset.label = label; buy.innerHTML = label; }
+    buy.disabled = (state.drops[sk.element] || 0) < cost;
     const equip = card.querySelector('[data-k="equip"]');
     const equipped = state.skillSlots.includes(sk.id);
     const eqLabel = equipped ? "Equipped" : "Equip";
@@ -2228,6 +2235,7 @@ function renderMerchant() {
     equip.disabled = equipped || slotsFull;
     equip.title = !equipped && slotsFull ? "All 3 slots are full. Remove a skill first." : "";
     card.classList.toggle("owned", level > 0);
+    card.classList.toggle("equipped", equipped);
   }
 }
 
