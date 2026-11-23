@@ -5,9 +5,10 @@ A small idle game you play in your browser. Mine ore, smith weapons and armor, s
 ## How to play
 
 1. **Mine**: click an ore (start with copper) to dig it up.
-2. **Forge**: when you have enough ore, smith a weapon or a piece of armor.
-3. **Sell** your gear for coins.
-4. **Spend coins** on miners (they dig for you, even while the game is closed, up to 8 hours), a better pickaxe (more ore per click), a master anvil (gear sells for more), and new mines: iron, gold and mithril.
+2. **Forge**: when you have enough ore, smith a weapon (sword, axe, spear, bow, staff) or a piece of armor (helmet, chestplate, gloves, boots, shield). Every type can be made from every ore, and better ores make stronger gear.
+3. **Sell** your gear for coins (sold gear is gone for good), or **equip** it.
+4. **Hero**: equipped gear raises your stats: HP, attack, defense, agility and skill power. Heavy armor gives more defense, light armor more agility.
+5. **Spend coins** on miners (they dig for you, even while the game is closed, up to 8 hours), a better pickaxe (more ore per click), a master anvil (gear sells for more), and new mines: iron, gold and mithril.
 
 Your progress saves automatically in your browser.
 
@@ -20,4 +21,4 @@ Your progress saves automatically in your browser.
 
 - `index.html`: the page layout
 - `style.css`: colors and layout
-- `game.js`: all the game rules (ore, recipes, prices and upgrades are at the top, easy to tweak)
+- `game.js`: all the game rules. Ores, gear types, stats, prices and upgrades are at the top, easy to tweak.

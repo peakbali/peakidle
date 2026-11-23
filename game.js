@@ -1,29 +1,95 @@
 // Peak Idle: mine ore, smith weapons and armor, sell them, grow your mine.
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
-const SAVE_KEY = "peakidle-save-v1";
+const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
+const SAVE_VERSION = 2;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
 
+// Each ore is also a gear material.
+//   statMult: how much stronger gear of this material is than copper gear
+//   costMult: how much more ore a piece of gear needs than the copper version
+//   gearValue: coins per ore used when the gear is sold
 const ORES = [
-  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,   minerCost: 15,   unlockCost: 0 },
-  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5, minerCost: 120,  unlockCost: 100 },
-  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 900, unlockCost: 1500 },
-  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1, minerCost: 6000, unlockCost: 20000 },
+  { id: "copper",  name: "Copper",  icon: "🟠", perSecPerMiner: 1,    minerCost: 15,   unlockCost: 0,     statMult: 1,   costMult: 1,   gearValue: 1.25 },
+  { id: "iron",    name: "Iron",    icon: "⚪", perSecPerMiner: 0.5,  minerCost: 120,  unlockCost: 100,   statMult: 2.2, costMult: 1.5, gearValue: 6 },
+  { id: "gold",    name: "Gold",    icon: "🟡", perSecPerMiner: 0.25, minerCost: 900,  unlockCost: 1500,  statMult: 4.5, costMult: 2,   gearValue: 36 },
+  { id: "mithril", name: "Mithril", icon: "🔷", perSecPerMiner: 0.1,  minerCost: 6000, unlockCost: 20000, statMult: 9,   costMult: 2.5, gearValue: 270 },
 ];
 
-// type: "weapon" or "armor". cost: ore needed. price: coins when sold.
-const RECIPES = [
-  { id: "copperDagger", name: "Copper Dagger",     type: "weapon", ore: "copper",  cost: 10,  price: 12 },
-  { id: "copperHelm",   name: "Copper Helmet",     type: "armor",  ore: "copper",  cost: 25,  price: 32 },
-  { id: "ironSword",    name: "Iron Sword",        type: "weapon", ore: "iron",    cost: 15,  price: 90 },
-  { id: "ironPlate",    name: "Iron Chestplate",   type: "armor",  ore: "iron",    cost: 40,  price: 260 },
-  { id: "goldAxe",      name: "Gold Battleaxe",    type: "weapon", ore: "gold",    cost: 20,  price: 700 },
-  { id: "goldShield",   name: "Gold Shield",       type: "armor",  ore: "gold",    cost: 50,  price: 1900 },
-  { id: "mithrilBlade", name: "Mithril Blade",     type: "weapon", ore: "mithril", cost: 25,  price: 6500 },
-  { id: "mithrilArmor", name: "Mithril Armor",     type: "armor",  ore: "mithril", cost: 60,  price: 17000 },
+// The hero's stats. "power" boosts skills (skills arrive in a later update).
+const STATS = [
+  { id: "hp",      name: "HP",          icon: "❤️" },
+  { id: "attack",  name: "Attack",      icon: "⚔️" },
+  { id: "defense", name: "Defense",     icon: "🛡️" },
+  { id: "agility", name: "Agility",     icon: "💨" },
+  { id: "power",   name: "Skill power", icon: "✨" },
 ];
+const HERO_BASE_STATS = { hp: 50, attack: 2, defense: 0, agility: 5, power: 0 };
+
+// Where gear can be worn. One item per slot.
+const SLOTS = [
+  { id: "weapon",     name: "Weapon" },
+  { id: "helmet",     name: "Helmet" },
+  { id: "chestplate", name: "Chestplate" },
+  { id: "gloves",     name: "Gloves" },
+  { id: "boots",      name: "Boots" },
+  { id: "shield",     name: "Shield" },
+];
+
+// Every gear type can be smithed from every ore.
+//   cost:  copper ore needed (other ores multiply this by costMult)
+//   stats: bonus for copper gear (other ores multiply this by statMult)
+const GEAR_TYPES = [
+  // Weapons
+  { id: "sword",      name: "Sword",      slot: "weapon",     icon: "🗡️", cost: 12, stats: { attack: 5, agility: 1 },  note: "Balanced" },
+  { id: "axe",        name: "Axe",        slot: "weapon",     icon: "🪓", cost: 15, stats: { attack: 8 },              note: "Hits hardest" },
+  { id: "spear",      name: "Spear",      slot: "weapon",     icon: "🔱", cost: 13, stats: { attack: 6, defense: 1 },  note: "Keeps foes at a distance" },
+  { id: "bow",        name: "Bow",        slot: "weapon",     icon: "🏹", cost: 10, stats: { attack: 4, agility: 4 },  note: "Quick and light" },
+  { id: "staff",      name: "Staff",      slot: "weapon",     icon: "🪄", cost: 10, stats: { attack: 2, power: 6 },    note: "Boosts skills" },
+  // Armor: heavy pieces give more defense, light pieces give more agility
+  { id: "helmet",     name: "Helmet",     slot: "helmet",     icon: "🪖", cost: 15, stats: { defense: 2, hp: 5 },      note: "Medium" },
+  { id: "chestplate", name: "Chestplate", slot: "chestplate", icon: "🥋", cost: 30, stats: { defense: 5, hp: 15 },     note: "Heavy" },
+  { id: "gloves",     name: "Gloves",     slot: "gloves",     icon: "🧤", cost: 10, stats: { defense: 1, attack: 1, agility: 2 }, note: "Light" },
+  { id: "boots",      name: "Boots",      slot: "boots",      icon: "🥾", cost: 12, stats: { defense: 1, agility: 3 }, note: "Light" },
+  { id: "shield",     name: "Shield",     slot: "shield",     icon: "🛡️", cost: 20, stats: { defense: 4, hp: 10 },     note: "Heavy" },
+];
+
+// All recipes, built from every ore x every gear type (e.g. "iron_bow").
+// cost: ore needed. price: coins when sold. element: weapons will get one later (fire, water, ...).
+const RECIPES = [];
+for (const ore of ORES) {
+  for (const type of GEAR_TYPES) {
+    const cost = Math.round(type.cost * ore.costMult);
+    const stats = {};
+    for (const [k, v] of Object.entries(type.stats)) stats[k] = Math.round(v * ore.statMult);
+    RECIPES.push({
+      id: `${ore.id}_${type.id}`,
+      name: `${ore.name} ${type.name}`,
+      ore: ore.id,
+      type: type.id,
+      slot: type.slot,
+      icon: type.icon,
+      note: type.note,
+      cost,
+      price: Math.round(cost * ore.gearValue),
+      stats,
+      element: null, // not used yet
+    });
+  }
+}
+
+// Item names from the first version of the game, so old saves keep their gear.
+const OLD_ITEM_IDS = {
+  copperDagger: "copper_sword",  copperHelm: "copper_helmet",
+  ironSword: "iron_sword",       ironPlate: "iron_chestplate",
+  goldAxe: "gold_axe",           goldShield: "gold_shield",
+  mithrilBlade: "mithril_sword", mithrilArmor: "mithril_chestplate",
+};
+
+const recipeById = Object.fromEntries(RECIPES.map(r => [r.id, r]));
+const slotById = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
 const MINER_COST_GROWTH = 1.15; // each extra miner costs 15% more
 
@@ -31,11 +97,14 @@ const MINER_COST_GROWTH = 1.15; // each extra miner costs 15% more
 
 function freshState() {
   const s = {
+    version: SAVE_VERSION,
     coins: 0,
     pickaxe: 1,           // ore per click
     anvil: 1,             // sell price multiplier level
     totalSmithed: 0,
-    ore: {}, miners: {}, unlocked: {}, items: {},
+    ore: {}, miners: {}, unlocked: {},
+    items: {},            // smithed gear in your bag: recipe id -> how many
+    equipped: {},         // slot id -> { id: recipe id, element } or null
     lastSaved: Date.now(),
   };
   for (const o of ORES) {
@@ -44,7 +113,24 @@ function freshState() {
     s.unlocked[o.id] = o.unlockCost === 0;
   }
   for (const r of RECIPES) s.items[r.id] = 0;
+  for (const slot of SLOTS) s.equipped[slot.id] = null;
   return s;
+}
+
+// Upgrade an old save to the current format, step by step.
+function migrate(saved) {
+  if (!saved.version || saved.version < 2) {
+    // v1 -> v2: the 8 old items became the new gear types.
+    const items = saved.items || {};
+    for (const [oldId, newId] of Object.entries(OLD_ITEM_IDS)) {
+      if (items[oldId]) items[newId] = (items[newId] || 0) + items[oldId];
+      delete items[oldId];
+    }
+    saved.items = items;
+    saved.version = 2;
+  }
+  // Later versions add their steps here (monsters, skills, reincarnation...).
+  return saved;
 }
 
 let state = load();
@@ -54,13 +140,20 @@ function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return s;
-    const saved = JSON.parse(raw);
+    const saved = migrate(JSON.parse(raw));
     // Merge so older saves still work when new ores or items are added.
     for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
     for (const key of ["ore", "miners", "unlocked", "items"]) {
-      Object.assign(s[key], saved[key] || {});
+      for (const [k, v] of Object.entries(saved[key] || {})) {
+        if (k in s[key]) s[key][k] = v;
+      }
+    }
+    for (const slot of SLOTS) {
+      const item = saved.equipped && saved.equipped[slot.id];
+      const r = item && recipeById[item.id];
+      if (r && r.slot === slot.id) s.equipped[slot.id] = { id: r.id, element: item.element || null };
     }
   } catch (e) {
     console.warn("Could not load save", e);
@@ -96,6 +189,22 @@ function anvilCost()   { return Math.ceil(200 * Math.pow(4, state.anvil - 1)); }
 function priceMultiplier() { return 1 + (state.anvil - 1) * 0.25; }
 function sellPrice(recipe) { return Math.floor(recipe.price * priceMultiplier()); }
 
+// The hero's total stats: base stats plus everything equipped.
+// Battles (coming later) read their numbers from here.
+function heroStats() {
+  const total = { ...HERO_BASE_STATS };
+  for (const slot of SLOTS) {
+    const item = state.equipped[slot.id];
+    if (!item) continue;
+    for (const [k, v] of Object.entries(recipeById[item.id].stats)) total[k] += v;
+  }
+  return total;
+}
+
+function statsText(stats) {
+  return STATS.filter(st => stats[st.id]).map(st => `+${stats[st.id]} ${st.name.toLowerCase()}`).join(", ");
+}
+
 function addOre(dt) {
   for (const o of ORES) state.ore[o.id] += orePerSecond(o) * dt;
 }
@@ -128,7 +237,7 @@ function unlockOre(oreId) {
 }
 
 function smith(recipeId, count) {
-  const r = RECIPES.find(x => x.id === recipeId);
+  const r = recipeById[recipeId];
   const canMake = Math.floor(state.ore[r.ore] / r.cost);
   const n = count === "max" ? canMake : Math.min(count, canMake);
   if (n <= 0) return;
@@ -138,12 +247,39 @@ function smith(recipeId, count) {
   render();
 }
 
+// Selling only sells gear in your bag. Equipped gear is safe. Sold gear is gone for good.
 function sell(recipeId) {
-  const r = RECIPES.find(x => x.id === recipeId);
+  const r = recipeById[recipeId];
   const n = state.items[r.id];
-  if (n <= 0) return;
+  if (n <= 0) return 0;
   state.items[r.id] = 0;
-  state.coins += n * sellPrice(r);
+  const coins = n * sellPrice(r);
+  state.coins += coins;
+  render();
+  return coins;
+}
+
+function sellAllOf(oreId) {
+  let coins = 0;
+  for (const r of RECIPES) if (r.ore === oreId) coins += sell(r.id);
+  if (coins > 0) log(`Sold all your ${oreById[oreId].name.toLowerCase()} gear for ${fmt(coins)} coins.`);
+}
+
+// Wear one item from your bag. Whatever was in that slot goes back to your bag.
+function equip(recipeId) {
+  const r = recipeById[recipeId];
+  if (state.items[r.id] <= 0) return;
+  unequip(r.slot);
+  state.items[r.id] -= 1;
+  state.equipped[r.slot] = { id: r.id, element: null };
+  render();
+}
+
+function unequip(slotId) {
+  const item = state.equipped[slotId];
+  if (!item) return;
+  state.items[item.id] += 1;
+  state.equipped[slotId] = null;
   render();
 }
 
@@ -192,6 +328,94 @@ function log(msg) {
 // Elements we update every frame, so we don't rebuild buttons while you're clicking.
 let refs = {};
 
+// Which material tab the forge is showing.
+let forgeOre = "copper";
+
+function buildForge() {
+  refs.recipes = {};
+  if (!state.unlocked[forgeOre]) forgeOre = "copper";
+
+  const tabs = document.getElementById("forge-tabs");
+  tabs.innerHTML = "";
+  for (const o of ORES) {
+    if (!state.unlocked[o.id]) continue;
+    const b = el(`<button class="tab${o.id === forgeOre ? " active" : ""}">${o.icon} ${o.name}</button>`);
+    b.onclick = () => { forgeOre = o.id; buildForge(); render(); };
+    tabs.appendChild(b);
+  }
+  const ore = oreById[forgeOre];
+  const sellAllBtn = el(`<button class="tab sell-all">Sell all ${ore.name.toLowerCase()} gear</button>`);
+  sellAllBtn.onclick = () => sellAllOf(forgeOre);
+  tabs.appendChild(sellAllBtn);
+  refs.sellAll = sellAllBtn;
+
+  const box = document.getElementById("recipes");
+  box.innerHTML = "";
+  let lastGroup = null;
+  for (const r of RECIPES) {
+    if (r.ore !== forgeOre) continue;
+    const group = r.slot === "weapon" ? "Weapons" : "Armor";
+    if (group !== lastGroup) {
+      box.appendChild(el(`<h3>${group}</h3>`));
+      lastGroup = group;
+    }
+    const card = el(`
+      <div class="card">
+        <div class="row">
+          <span class="name">${r.icon} ${r.name} <span class="tag" data-k="worn" hidden>Equipped</span></span>
+          <span class="small">In bag: <span class="num" data-k="owned"></span></span>
+        </div>
+        <div class="stats-line">${statsText(r.stats)} <span class="small">· ${r.note}</span></div>
+        <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore · sells for <span data-k="price"></span> 🪙</div>
+        <div class="buttons">
+          <button data-k="make1">Smith 1</button>
+          <button data-k="makeMax">Smith max</button>
+          <button data-k="equip">Equip</button>
+          <button data-k="sell" class="primary">Sell all</button>
+        </div>
+      </div>`);
+    card.querySelector('[data-k="make1"]').onclick = () => smith(r.id, 1);
+    card.querySelector('[data-k="makeMax"]').onclick = () => smith(r.id, "max");
+    card.querySelector('[data-k="equip"]').onclick = () => equip(r.id);
+    card.querySelector('[data-k="sell"]').onclick = () => sell(r.id);
+    refs.recipes[r.id] = card;
+    box.appendChild(card);
+  }
+}
+
+function buildHero() {
+  const statsBox = document.getElementById("hero-stats");
+  statsBox.innerHTML = "";
+  refs.stats = {};
+  for (const st of STATS) {
+    const row = el(`
+      <div class="stat">
+        <span>${st.icon} ${st.name}</span>
+        <span><b class="num" data-k="total"></b> <span class="small bonus" data-k="bonus"></span></span>
+      </div>`);
+    refs.stats[st.id] = row;
+    statsBox.appendChild(row);
+  }
+
+  const slotsBox = document.getElementById("hero-slots");
+  slotsBox.innerHTML = "";
+  refs.slots = {};
+  for (const slot of SLOTS) {
+    const row = el(`
+      <div class="slot">
+        <div>
+          <div class="small">${slot.name}</div>
+          <div class="name" data-k="item"></div>
+          <div class="small" data-k="itemStats"></div>
+        </div>
+        <button data-k="remove">Unequip</button>
+      </div>`);
+    row.querySelector('[data-k="remove"]').onclick = () => unequip(slot.id);
+    refs.slots[slot.id] = row;
+    slotsBox.appendChild(row);
+  }
+}
+
 function buildUI() {
   refs = { ores: {}, recipes: {} };
 
@@ -231,30 +455,8 @@ function buildUI() {
     }
   }
 
-  const recipesBox = document.getElementById("recipes");
-  recipesBox.innerHTML = "";
-  for (const r of RECIPES) {
-    if (!state.unlocked[r.ore]) continue;
-    const ore = oreById[r.ore];
-    const card = el(`
-      <div class="card">
-        <div class="row">
-          <span class="name">${r.type === "weapon" ? "🗡️" : "🛡️"} ${r.name}</span>
-          <span class="small">Owned: <span class="num" data-k="owned"></span></span>
-        </div>
-        <div class="small">Costs ${r.cost} ${ore.name.toLowerCase()} ore · sells for <span data-k="price"></span> 🪙</div>
-        <div class="buttons">
-          <button data-k="make1">Smith 1</button>
-          <button data-k="makeMax">Smith max</button>
-          <button data-k="sell" class="primary">Sell all</button>
-        </div>
-      </div>`);
-    card.querySelector('[data-k="make1"]').onclick = () => smith(r.id, 1);
-    card.querySelector('[data-k="makeMax"]').onclick = () => smith(r.id, "max");
-    card.querySelector('[data-k="sell"]').onclick = () => sell(r.id);
-    refs.recipes[r.id] = card;
-    recipesBox.appendChild(card);
-  }
+  buildForge();
+  buildHero();
 
   const upBox = document.getElementById("upgrades");
   upBox.innerHTML = "";
@@ -276,8 +478,8 @@ function buildUI() {
   refs.anvil.querySelector('[data-k="buy"]').onclick = buyAnvil;
   upBox.appendChild(refs.anvil);
 
-  refs.stats = el(`<div class="small">Items smithed so far: <span data-k="total"></span></div>`);
-  upBox.appendChild(refs.stats);
+  refs.smithed = el(`<div class="small">Items smithed so far: <span data-k="total"></span></div>`);
+  upBox.appendChild(refs.smithed);
 
   render();
 }
@@ -315,6 +517,12 @@ function render() {
     card.querySelector('[data-k="make1"]').disabled = !canMake;
     card.querySelector('[data-k="makeMax"]').disabled = !canMake;
     card.querySelector('[data-k="sell"]').disabled = state.items[r.id] <= 0;
+    const worn = state.equipped[r.slot] && state.equipped[r.slot].id === r.id;
+    card.querySelector('[data-k="worn"]').hidden = !worn;
+    card.querySelector('[data-k="equip"]').disabled = state.items[r.id] <= 0;
+  }
+  if (refs.sellAll) {
+    refs.sellAll.disabled = !RECIPES.some(r => r.ore === forgeOre && state.items[r.id] > 0);
   }
 
   set(refs.pickaxe, "lvl", String(state.pickaxe));
@@ -326,7 +534,23 @@ function render() {
   set(refs.anvil, "cost", fmt(anvilCost()));
   refs.anvil.querySelector('[data-k="buy"]').disabled = state.coins < anvilCost();
 
-  set(refs.stats, "total", fmt(state.totalSmithed));
+  set(refs.smithed, "total", fmt(state.totalSmithed));
+
+  const hero = heroStats();
+  for (const st of STATS) {
+    const bonus = hero[st.id] - HERO_BASE_STATS[st.id];
+    set(refs.stats[st.id], "total", fmt(hero[st.id]));
+    set(refs.stats[st.id], "bonus", bonus > 0 ? `(+${fmt(bonus)} from gear)` : "");
+  }
+  for (const slot of SLOTS) {
+    const row = refs.slots[slot.id];
+    const item = state.equipped[slot.id];
+    const r = item && recipeById[item.id];
+    set(row, "item", r ? `${r.icon} ${r.name}` : "Empty");
+    set(row, "itemStats", r ? statsText(r.stats) : "Smith something in the Forge and press Equip.");
+    row.classList.toggle("empty", !r);
+    row.querySelector('[data-k="remove"]').hidden = !r;
+  }
 }
 
 // ---------- Main loop ----------

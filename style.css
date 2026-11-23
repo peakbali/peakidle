@@ -130,3 +130,23 @@ footer {
 }
 
 #log { color: var(--text); text-shadow: 0 1px 3px #000; font-size: 13px; min-height: 1.4em; }
+
+h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Forge material tabs */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.tab { font-size: 13px; padding: 4px 10px; }
+.tab.active { background: var(--accent); border-color: var(--accent); color: #1d1b19; font-weight: 600; }
+.tab.sell-all { margin-left: auto; }
+
+.stats-line { font-size: 13px; color: var(--good); margin: 2px 0; }
+.tag { font-size: 11px; font-weight: 600; color: #1d1b19; background: var(--good); border-radius: 4px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
+
+/* Hero panel */
+.hero-stats { display: grid; gap: 4px; }
+.stat { display: flex; justify-content: space-between; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.bonus { color: var(--good); }
+.slot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; }
+.slot.empty .name { color: var(--muted); font-weight: 400; }
+.slot .small[data-k="itemStats"] { color: var(--good); }
+.slot.empty .small[data-k="itemStats"] { color: var(--muted); }
