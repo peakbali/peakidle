@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Peak Idle: Mine and Smith</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>⛏️ Peak Idle</h1>
+    <div class="coins">🪙 <span id="coins">0</span> coins</div>
+  </header>
+
+  <main>
+    <!-- Mining: click to mine, hire miners to mine for you -->
+    <section class="panel">
+      <h2>Mine</h2>
+      <p class="hint">Click an ore to mine it. Hire miners to mine while you're away.</p>
+      <div id="ores"></div>
+    </section>
+
+    <!-- Smithing: turn ore into weapons and armor -->
+    <section class="panel">
+      <h2>Forge</h2>
+      <p class="hint">Turn ore into weapons and armor, then sell them for coins.</p>
+      <div id="recipes"></div>
+    </section>
+
+    <!-- Upgrades bought with coins -->
+    <section class="panel">
+      <h2>Upgrades</h2>
+      <div id="upgrades"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div id="log"></div>
+    <button id="reset" class="danger">Reset game</button>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
