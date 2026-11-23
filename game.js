@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 5;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 6;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -105,8 +105,8 @@ const ANVIL   = { start: 300, growth: 5 };      // anvil level 1 -> 2 costs 300,
 // progress reset. You keep learned skills, Souls and attributes, and you earn new Souls.
 const REINCARNATION = {
   priceGrowth: 1.25,     // every reincarnation makes miners, mines, upgrades and skills 25% pricier (stacks)
-  soulsPerDepth: 2,      // Souls from monsters = soulsPerDepth x (deepest monster beaten) ^ depthPower
-  depthPower: 1.4,       //   e.g. 1st boss (5th monster) = 19 Souls, last boss (20th) = 132 Souls
+  soulsPerDepth: 2,      // Souls from monsters = soulsPerDepth x depth ^ depthPower, where depth = 5 per boss beaten
+  depthPower: 1.4,       //   + 1 per win (up to 4) against monsters of your own tier. 1st boss = 19 Souls, last boss = 132 Souls
   coinsPerSoul: 500,     // Souls from coins = square root of (coins earned this run / coinsPerSoul)
 };                       //   e.g. 50K coins = 10 Souls, 5M coins = 100 Souls
 
@@ -203,40 +203,36 @@ const WEAKEN_MULT = 0.65; // weakened monsters deal 35% less damage
 
 // ---------- Monsters ----------
 
-// A ladder of areas from easy to hard. Beating a monster unlocks the next one,
-// and the last monster of each area is its boss.
-const AREAS = [
-  { id: "tunnels", name: "Mossy Tunnels", icon: "🌿", monsters: [
-    { id: "cinder_rat",    name: "Cinder Rat",    icon: "🐀", element: "fire" },
-    { id: "frost_beetle",  name: "Frost Beetle",  icon: "🪲", element: "ice" },
-    { id: "spark_bat",     name: "Spark Bat",     icon: "🦇", element: "lightning" },
-    { id: "mud_slime",     name: "Mud Slime",     icon: "🟤", element: "earth" },
-    { id: "howling_wolf",  name: "Howling Wolf",  icon: "🐺", element: "wind", boss: true },
-  ]},
-  { id: "deep_mine", name: "Deep Mine", icon: "🕳️", monsters: [
-    { id: "cave_gust",     name: "Cave Gust",     icon: "💨", element: "wind" },
-    { id: "stone_golem",   name: "Stone Golem",   icon: "🗿", element: "earth" },
-    { id: "ember_imp",     name: "Ember Imp",     icon: "👺", element: "fire" },
-    { id: "volt_eel",      name: "Volt Eel",      icon: "🐍", element: "lightning" },
-    { id: "glacier_troll", name: "Glacier Troll", icon: "🧌", element: "ice", boss: true },
-  ]},
-  { id: "molten_halls", name: "Molten Halls", icon: "🌋", monsters: [
-    { id: "ash_hound",      name: "Ash Hound",      icon: "🐕", element: "fire" },
-    { id: "thunder_hawk",   name: "Thunder Hawk",   icon: "🦅", element: "lightning" },
-    { id: "crystal_spider", name: "Crystal Spider", icon: "🕷️", element: "ice" },
-    { id: "storm_harpy",    name: "Storm Harpy",    icon: "🪶", element: "wind" },
-    { id: "magma_wyrm",     name: "Magma Wyrm",     icon: "🐉", element: "fire", boss: true },
-  ]},
-  { id: "sky_peak", name: "Sky Peak", icon: "🏔️", monsters: [
-    { id: "frost_giant",    name: "Frost Giant",    icon: "🥶", element: "ice" },
-    { id: "quake_behemoth", name: "Quake Behemoth", icon: "🦏", element: "earth" },
-    { id: "tempest_djinn",  name: "Tempest Djinn",  icon: "🧞", element: "wind" },
-    { id: "storm_titan",    name: "Storm Titan",    icon: "⛈️", element: "lightning" },
-    { id: "peak_dragon",    name: "Elder Peak Dragon", icon: "🐲", element: "earth", boss: true },
-  ]},
+// Monsters appear at random. Your danger level ("tier") decides how strong they are.
+// Each tier has a pool of creatures for the random spawns and one fixed boss.
+// Beat the boss of your tier to go up one tier: spawns get stronger and the next boss appears.
+// A random monster gets a random element, so its weakness, resistance and essence drop are random too.
+const TIERS = [
+  { name: "Mossy Tunnels", icon: "🌿",
+    creatures: [{ name: "Rat", icon: "🐀" }, { name: "Beetle", icon: "🪲" }, { name: "Bat", icon: "🦇" }, { name: "Slime", icon: "🟢" }],
+    boss: { id: "howling_wolf", name: "Howling Wolf", icon: "🐺", element: "wind" } },
+  { name: "Deep Mine", icon: "🕳️",
+    creatures: [{ name: "Lizard", icon: "🦎" }, { name: "Golem", icon: "🗿" }, { name: "Imp", icon: "👺" }, { name: "Eel", icon: "🐍" }],
+    boss: { id: "glacier_troll", name: "Glacier Troll", icon: "🧌", element: "ice" } },
+  { name: "Molten Halls", icon: "🌋",
+    creatures: [{ name: "Hound", icon: "🐕" }, { name: "Hawk", icon: "🦅" }, { name: "Spider", icon: "🕷️" }, { name: "Harpy", icon: "🪶" }],
+    boss: { id: "magma_wyrm", name: "Magma Wyrm", icon: "🐉", element: "fire" } },
+  { name: "Sky Peak", icon: "🏔️",
+    creatures: [{ name: "Giant", icon: "🥶" }, { name: "Behemoth", icon: "🦏" }, { name: "Djinn", icon: "🧞" }, { name: "Titan", icon: "⛈️" }],
+    boss: { id: "peak_dragon", name: "Elder Peak Dragon", icon: "🐲", element: "earth" } },
 ];
+// A random monster's name starts with a word for its element, e.g. "Blazing Rat" or "Frozen Bat".
+const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", earth: "Rocky", lightning: "Charged" };
 
-// Monster stats grow exponentially along the ladder: stat = start * growth ^ (position in ladder).
+const SPAWN = {
+  everyMs: 5 * 60 * 1000, // a new monster appears every 5 minutes, even while the game is closed
+  max: 5,                 // at most 5 monsters wait at once; the timer pauses while 5 are waiting
+  newRun: 3,              // a new game or reincarnation starts with 3 monsters already waiting
+  lowerTierChance: 0.4,   // 40% of spawns are one tier below yours (from tier 2 up), for variety
+};
+
+// Monster stats grow exponentially with tier: stat = start * growth ^ step.
+// Random monsters of tier T use step (T-1)*5 + 2, the boss of tier T uses step T*5 - 1 (plus BOSS_MULT).
 const MONSTER_SCALING = {
   hp:      { start: 30,  growth: 1.17 },
   attack:  { start: 4,   growth: 1.17 },
@@ -246,7 +242,6 @@ const MONSTER_SCALING = {
   drops:   { start: 1,   growth: 1.2 },  // element drops for a win
 };
 const BOSS_MULT = { hp: 1.6, attack: 1.15, defense: 1.15, agility: 1.1, coins: 3, drops: 3 };
-const MONSTER_COOLDOWN_MS = 15 * 60 * 1000; // each monster rests 15 minutes after a fight
 
 // Battle rules
 const BATTLE = {
@@ -260,14 +255,11 @@ const BATTLE = {
   guardMultiplier: 0.4,   // guarding takes only 40% damage
 };
 
-const MONSTERS = [];
-AREAS.forEach(area => area.monsters.forEach(m => {
-  const n = MONSTERS.length;
-  const stat = key => MONSTER_SCALING[key].start * Math.pow(MONSTER_SCALING[key].growth, n) * (m.boss ? BOSS_MULT[key] : 1);
-  MONSTERS.push({
-    ...m,
-    area: area.id,
-    index: n,
+// Stats and rewards for a monster of this tier (1-4).
+function monsterStats(tier, boss) {
+  const step = boss ? tier * 5 - 1 : (tier - 1) * 5 + 2;
+  const stat = key => MONSTER_SCALING[key].start * Math.pow(MONSTER_SCALING[key].growth, step) * (boss ? BOSS_MULT[key] : 1);
+  return {
     stats: {
       hp: Math.round(stat("hp")),
       attack: Math.round(stat("attack")),
@@ -275,10 +267,27 @@ AREAS.forEach(area => area.monsters.forEach(m => {
       agility: Math.round(stat("agility")),
     },
     reward: { coins: Math.round(stat("coins")), drops: Math.round(stat("drops")) },
-  });
-}));
-const monsterById = Object.fromEntries(MONSTERS.map(m => [m.id, m]));
-const areaById = Object.fromEntries(AREAS.map(a => [a.id, a]));
+  };
+}
+
+// The full monster for a waiting spawn ({ uid, tier, creature, element }) or a boss tier.
+function spawnMonster(sp) {
+  const c = TIERS[sp.tier - 1].creatures[sp.creature];
+  return { uid: sp.uid, tier: sp.tier, boss: false, element: sp.element,
+    name: `${ELEMENT_ADJECTIVE[sp.element]} ${c.name}`, icon: c.icon, ...monsterStats(sp.tier, false) };
+}
+function bossMonster(tier) {
+  const b = TIERS[tier - 1].boss;
+  return { uid: "boss", tier, boss: true, element: b.element, name: b.name, icon: b.icon, ...monsterStats(tier, true) };
+}
+
+// Old saves (before random spawns) used a fixed ladder. Only needed to work out the tier of an old save.
+const OLD_LADDER = [
+  ["cinder_rat", "frost_beetle", "spark_bat", "mud_slime", "howling_wolf"],
+  ["cave_gust", "stone_golem", "ember_imp", "volt_eel", "glacier_troll"],
+  ["ash_hound", "thunder_hawk", "crystal_spider", "storm_harpy", "magma_wyrm"],
+  ["frost_giant", "quake_behemoth", "tempest_djinn", "storm_titan", "peak_dragon"],
+];
 
 // ---------- State ----------
 
@@ -293,8 +302,11 @@ function freshState() {
     items: {},            // smithed gear in your bag: item key -> how many (see itemKey)
     equipped: {},         // slot id -> { id: recipe id, element } or null
     drops: {},            // element id -> how many essences you have
-    beaten: {},           // monster id -> how many times you've won against it
-    cooldowns: {},        // monster id -> time (ms) when it can be fought again
+    bossesBeaten: 0,      // bosses beaten this run; your tier (danger level) is this + 1
+    tierWins: 0,          // wins against random monsters of your current tier (adds Souls)
+    spawns: [],           // random monsters waiting to be fought: { uid, tier, creature, element }
+    nextSpawnAt: null,    // time (ms) the next monster appears, null while the screen is full
+    nextUid: 1,
     skills: {},           // skill id -> level (0 = not bought yet)
     skillSlots: [null, null, null], // skill ids equipped for battle
     battle: null,         // the fight in progress, saved so a reload can't skip it
@@ -319,6 +331,8 @@ function freshState() {
   }
   for (const sk of SKILLS) s.skills[sk.id] = 0;
   for (const slot of SLOTS) s.equipped[slot.id] = null;
+  for (let i = 0; i < SPAWN.newRun; i++) addSpawn(s);
+  s.nextSpawnAt = Date.now() + SPAWN.everyMs;
   return s;
 }
 
@@ -348,6 +362,20 @@ function migrate(saved) {
     saved.runCoins = saved.coins || 0;
     saved.version = 5;
   }
+  if (saved.version < 6) {
+    // v5 -> v6: random monster spawns and tiers replace the fixed ladder.
+    // Your tier = the area you had reached; wins in that area count toward Souls like before.
+    const beaten = saved.beaten || {};
+    let bosses = 0;
+    while (bosses < OLD_LADDER.length && beaten[OLD_LADDER[bosses][4]]) bosses++;
+    saved.bossesBeaten = bosses;
+    saved.tierWins = bosses < OLD_LADDER.length ? OLD_LADDER[bosses].slice(0, 4).filter(id => beaten[id]).length : 0;
+    delete saved.beaten;
+    delete saved.cooldowns;
+    // A fight from the old ladder can't continue (losing or leaving it never cost anything anyway).
+    if (saved.battle && !saved.battle.monster) saved.battle = null;
+    saved.version = 6;
+  }
   // Later versions add their steps here.
   return saved;
 }
@@ -361,7 +389,7 @@ function load() {
     if (!raw) return s;
     const saved = migrate(JSON.parse(raw));
     // Merge so older saves still work when new ores or items are added.
-    for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved", "runCoins", "souls", "reincarnations", "totalSouls"]) {
+    for (const key of ["coins", "pickaxe", "anvil", "totalSmithed", "lastSaved", "runCoins", "souls", "reincarnations", "totalSouls", "bossesBeaten", "tierWins", "nextUid"]) {
       if (typeof saved[key] === "number") s[key] = saved[key];
     }
     for (const key of ["ore", "miners", "unlocked", "items", "drops", "skills", "attributes"]) {
@@ -378,10 +406,13 @@ function load() {
     (saved.skillSlots || []).slice(0, BATTLE.skillSlots).forEach((id, i) => {
       if (skillById[id] && s.skills[id] > 0 && !s.skillSlots.includes(id)) s.skillSlots[i] = id;
     });
-    for (const k of ["beaten", "cooldowns"]) {
-      for (const [id, v] of Object.entries(saved[k] || {})) if (monsterById[id]) s[k][id] = v;
+    s.bossesBeaten = Math.min(TIERS.length, Math.max(0, s.bossesBeaten));
+    if (Array.isArray(saved.spawns)) {
+      s.spawns = saved.spawns.filter(sp => sp && TIERS[sp.tier - 1] && TIERS[sp.tier - 1].creatures[sp.creature] && elementById[sp.element])
+        .slice(0, SPAWN.max);
+      s.nextSpawnAt = typeof saved.nextSpawnAt === "number" ? saved.nextSpawnAt : null;
     }
-    if (saved.battle && monsterById[saved.battle.monsterId]) s.battle = saved.battle;
+    if (saved.battle && saved.battle.monster) s.battle = saved.battle;
   } catch (e) {
     console.warn("Could not load save", e);
   }
@@ -480,13 +511,35 @@ function addOre(dt) {
 
 // ---------- Monster rules ----------
 
-// A monster can be fought once the one before it in the ladder has been beaten.
-function monsterUnlocked(m) {
-  return m.index === 0 || (state.beaten[MONSTERS[m.index - 1].id] || 0) > 0;
+// Your danger level. Goes up by one each time you beat your tier's boss.
+function currentTier(s = state) { return Math.min(TIERS.length, s.bossesBeaten + 1); }
+function peakCleared() { return state.bossesBeaten >= TIERS.length; }
+
+// Put one new random monster on the screen: your tier, or sometimes one below, with a random element.
+function addSpawn(s) {
+  const top = currentTier(s);
+  const tier = top > 1 && Math.random() < SPAWN.lowerTierChance ? top - 1 : top;
+  const creature = Math.floor(Math.random() * TIERS[tier - 1].creatures.length);
+  const element = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)].id;
+  s.spawns.push({ uid: s.nextUid++, tier, creature, element });
 }
-function areaUnlocked(area) { return monsterUnlocked(monsterById[area.monsters[0].id]); }
-function cooldownLeft(m) { return Math.max(0, (state.cooldowns[m.id] || 0) - Date.now()); }
-function canFight(m) { return !state.battle && monsterUnlocked(m) && cooldownLeft(m) === 0; }
+
+// Add every monster that should have appeared by now (also covers time the game was closed).
+// The timer stops while the screen is full and starts again when a spot opens up.
+function updateSpawns(now = Date.now()) {
+  let added = 0;
+  while (state.spawns.length < SPAWN.max) {
+    if (state.nextSpawnAt === null) state.nextSpawnAt = now + SPAWN.everyMs;
+    if (now < state.nextSpawnAt) break;
+    addSpawn(state);
+    added++;
+    state.nextSpawnAt += SPAWN.everyMs;
+  }
+  if (state.spawns.length >= SPAWN.max) state.nextSpawnAt = null;
+  return added;
+}
+
+function canFight() { return !state.battle; }
 
 // The element your basic attack uses: the equipped weapon's (null = neutral).
 function weaponElement() {
@@ -651,12 +704,21 @@ function unequipSkill(index) {
 // A battle is plain data in state.battle, so it's saved and survives a page reload.
 // Your stats are locked in when the fight starts.
 
-function startBattle(monsterId) {
-  const m = monsterById[monsterId];
-  if (!m || !canFight(m)) return;
+// uid: a waiting monster's uid, or "boss" for your tier's boss.
+function startBattle(uid) {
+  if (!canFight()) return;
+  let m;
+  if (uid === "boss") {
+    if (peakCleared()) return;
+    m = bossMonster(currentTier());
+  } else {
+    const sp = state.spawns.find(x => x.uid === uid);
+    if (!sp) return;
+    m = spawnMonster(sp);
+  }
   const hero = heroStats();
   state.battle = {
-    monsterId: m.id,
+    monster: m,        // a copy of the monster, so the fight survives a reload
     hero: { ...hero, element: weaponElement() },
     // Skills you brought, with their level, locked in like your stats.
     skills: state.skillSlots.map(id => id ? { id, level: skillLevel(id) } : null),
@@ -690,7 +752,7 @@ function battleLog(msg) {
 function battleAction(action) {
   const b = state.battle;
   if (!b || b.result) return;
-  const m = monsterById[b.monsterId];
+  const m = b.monster;
 
   if (action === "attack") {
     const hit = rollHit({
@@ -785,7 +847,7 @@ function castSkill(sk, level, m) {
 
 function monsterTurn() {
   const b = state.battle;
-  const m = monsterById[b.monsterId];
+  const m = b.monster;
   if (b.stunned) {
     b.stunned = false;
     battleLog(`${m.name} is stunned and can't move.`);
@@ -818,21 +880,29 @@ function monsterTurn() {
 
 function endBattle(result) {
   const b = state.battle;
-  const m = monsterById[b.monsterId];
+  const m = b.monster;
   b.result = result;
-  state.cooldowns[m.id] = Date.now() + MONSTER_COOLDOWN_MS;
   if (result === "win") {
-    const firstWin = !state.beaten[m.id];
-    state.beaten[m.id] = (state.beaten[m.id] || 0) + 1;
     state.drops[m.element] += m.reward.drops;
     earnCoins(m.reward.coins);
     const e = elementById[m.element];
     battleLog(`You win! You get ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`);
-    const next = MONSTERS[m.index + 1];
-    if (firstWin && next) {
-      battleLog(next.area !== m.area
-        ? `A new area opens: ${areaById[next.area].name}!`
-        : `${next.name} can now be fought.`);
+    if (m.boss) {
+      // The milestone: move up a tier. Monsters already waiting stay as they are.
+      if (m.tier === currentTier() && !peakCleared()) {
+        state.bossesBeaten += 1;
+        state.tierWins = 0;
+        if (peakCleared()) battleLog("You conquered the Sky Peak! Reincarnate in the Souls panel for a big Souls reward.");
+        else {
+          const t = TIERS[currentTier() - 1];
+          battleLog(`Danger level ${currentTier()}: ${t.icon} ${t.name}! Stronger monsters will appear, and a new boss awaits.`);
+        }
+      }
+    } else {
+      const before = state.spawns.length;
+      state.spawns = state.spawns.filter(x => x.uid !== m.uid);
+      if (m.tier === currentTier()) state.tierWins += 1;
+      if (before >= SPAWN.max && state.spawns.length < SPAWN.max) state.nextSpawnAt = Date.now() + SPAWN.everyMs;
     }
   } else if (result === "lose") {
     battleLog(`${m.name} knocks you out. You wake up back at camp, nothing lost.`);
@@ -869,11 +939,11 @@ function buyAnvil() {
 
 // ---------- Reincarnation ----------
 
-// How far down the monster ladder you've won (0 = no wins, 20 = beat the last boss).
+// How far you got this run: 5 per boss beaten, plus 1 per win (up to 4) against monsters of your
+// own tier. 0 = no wins yet, 20 = beat the last boss.
 function deepestBeaten() {
-  let depth = 0;
-  for (const m of MONSTERS) if (state.beaten[m.id]) depth = Math.max(depth, m.index + 1);
-  return depth;
+  if (peakCleared()) return TIERS.length * 5;
+  return state.bossesBeaten * 5 + Math.min(4, state.tierWins);
 }
 
 // Souls you'd get if you reincarnated right now, and where they come from.
@@ -1083,9 +1153,37 @@ function fmtTime(ms) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// One monster card for the Adventure panel.
+function monsterCard(m) {
+  const e = elementById[m.element];
+  const weak = elementById[weaknessOf(m.element)];
+  const strong = elementById[strengthOf(m.element)];
+  const lower = !m.boss && m.tier < currentTier();
+  const card = el(`
+    <div class="card monster${m.boss ? " boss" : ""}">
+      <div class="row">
+        <span class="name">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}
+          <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></span>
+        ${elementTag(m.element)}
+      </div>
+      <div class="small">Weak to ${weak.icon} ${weak.name} · resists ${strong.icon} ${strong.name}</div>
+      <div class="small">❤️ ${fmt(m.stats.hp)} · ⚔️ ${fmt(m.stats.attack)} · 🛡️ ${fmt(m.stats.defense)} · 💨 ${fmt(m.stats.agility)}</div>
+      <div class="small">Win: ${m.reward.drops} ${e.icon} ${e.drop} + ${fmt(m.reward.coins)} 🪙</div>
+      <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
+    </div>`);
+  card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.uid);
+  return card;
+}
+
+// What the Adventure panel was last built for, so it only rebuilds when monsters change.
+function adventureKey() {
+  return `${state.bossesBeaten}|${state.spawns.map(sp => sp.uid).join(",")}`;
+}
+
 function buildAdventure() {
-  refs.monsters = {};
+  refs.monsters = [];
   refs.drops = {};
+  refs.adventureKey = adventureKey();
 
   const dropsBox = document.getElementById("drops");
   dropsBox.innerHTML = "";
@@ -1097,54 +1195,46 @@ function buildAdventure() {
 
   const box = document.getElementById("areas");
   box.innerHTML = "";
-  for (const area of AREAS) {
-    if (!areaUnlocked(area)) {
-      const prevBoss = MONSTERS[monsterById[area.monsters[0].id].index - 1];
-      box.appendChild(el(`<div class="card locked"><span class="name">${area.icon} ${area.name} (locked)</span>
-        <div class="small">Beat ${prevBoss.icon} ${prevBoss.name} to open it.</div></div>`));
-      break; // keep later areas a surprise
-    }
-    box.appendChild(el(`<h3>${area.icon} ${area.name}</h3>`));
-    for (const am of area.monsters) {
-      const m = monsterById[am.id];
-      if (!monsterUnlocked(m)) {
-        box.appendChild(el(`<div class="card locked small">❔ Beat ${MONSTERS[m.index - 1].name} to find the next monster.</div>`));
-        break;
-      }
-      const e = elementById[m.element];
-      const weak = elementById[weaknessOf(m.element)];
-      const strong = elementById[strengthOf(m.element)];
-      const card = el(`
-        <div class="card monster${m.boss ? " boss" : ""}">
-          <div class="row">
-            <span class="name">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""} <span class="tag" data-k="won" hidden></span></span>
-            ${elementTag(m.element)}
-          </div>
-          <div class="small">Weak to ${weak.icon} ${weak.name} · resists ${strong.icon} ${strong.name}</div>
-          <div class="small">❤️ ${fmt(m.stats.hp)} · ⚔️ ${fmt(m.stats.attack)} · 🛡️ ${fmt(m.stats.defense)} · 💨 ${fmt(m.stats.agility)}</div>
-          <div class="small">Win: ${m.reward.drops} ${e.icon} ${e.drop} + ${fmt(m.reward.coins)} 🪙</div>
-          <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
-        </div>`);
-      card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.id);
-      refs.monsters[m.id] = card;
-      box.appendChild(card);
-    }
+  const tier = TIERS[currentTier() - 1];
+  box.appendChild(el(`<div class="card danger-level">
+    <div class="row"><span class="name">⚠️ Danger level ${currentTier()} of ${TIERS.length}</span><span>${tier.icon} ${tier.name}</span></div>
+    <div class="small">${peakCleared() ? "You conquered every boss. Reincarnate for Souls and climb again!" : "Beat the boss below to raise the danger level."}</div>
+  </div>`));
+
+  refs.spawnTimer = el(`<h3 class="spawn-head"><span>Monsters <span class="num" data-k="count"></span></span> <span class="num" data-k="timer"></span></h3>`);
+  box.appendChild(refs.spawnTimer);
+  if (state.spawns.length === 0) {
+    box.appendChild(el(`<div class="card locked small">No monsters around right now. A new one appears every ${SPAWN.everyMs / 60000} minutes.</div>`));
+  }
+  for (const sp of state.spawns) {
+    const card = monsterCard(spawnMonster(sp));
+    refs.monsters.push(card);
+    box.appendChild(card);
+  }
+
+  box.appendChild(el(`<h3>Boss</h3>`));
+  if (peakCleared()) {
+    const last = TIERS[TIERS.length - 1].boss;
+    box.appendChild(el(`<div class="card boss small">🏆 ${last.icon} ${last.name} is defeated. The Sky Peak is yours!</div>`));
+  } else {
+    const card = monsterCard(bossMonster(currentTier()));
+    refs.monsters.push(card);
+    box.appendChild(card);
   }
 }
 
 function renderAdventure() {
+  if (refs.adventureKey !== adventureKey()) buildAdventure();
   for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmt(state.drops[e.id]));
-  for (const [id, card] of Object.entries(refs.monsters)) {
-    const m = monsterById[id];
-    const left = cooldownLeft(m);
+  set(refs.spawnTimer, "count", `${state.spawns.length}/${SPAWN.max}`);
+  set(refs.spawnTimer, "timer", state.nextSpawnAt === null
+    ? "Full: timer paused"
+    : `Next in ${fmtTime(Math.max(0, state.nextSpawnAt - Date.now()))}`);
+  for (const card of refs.monsters) {
     const btn = card.querySelector('[data-k="fight"]');
-    const label = left > 0 ? `Resting ${fmtTime(left)}` : state.battle ? "In a fight" : "Fight";
+    const label = state.battle ? "In a fight" : "Fight";
     if (btn.textContent !== label) btn.textContent = label;
-    btn.disabled = !canFight(m);
-    const wins = state.beaten[m.id] || 0;
-    const won = card.querySelector('[data-k="won"]');
-    won.hidden = wins === 0;
-    set(card, "won", `Beaten ×${wins}`);
+    btn.disabled = !canFight();
   }
 }
 
@@ -1165,8 +1255,8 @@ function renderBattle() {
   const b = state.battle;
   const overlay = document.getElementById("battle");
   if (!b) { overlay.hidden = true; return; }
-  const m = monsterById[b.monsterId];
-  const area = areaById[m.area];
+  const m = b.monster;
+  const tier = TIERS[m.tier - 1];
   const box = overlay.querySelector(".battle-box");
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
@@ -1184,7 +1274,9 @@ function renderBattle() {
   if (b.result) {
     const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
     footer = `<div class="result ${b.result}">${titles[b.result]}</div>
-      <div class="small">${m.name} rests for 15 minutes before you can fight it again.</div>
+      <div class="small">${b.result === "win"
+        ? (m.boss ? "" : `A new monster appears every ${SPAWN.everyMs / 60000} minutes.`)
+        : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
       <div class="buttons"><button class="primary" data-k="close">Back to the game</button></div>`;
   } else {
     footer = `
@@ -1197,7 +1289,7 @@ function renderBattle() {
   }
 
   box.innerHTML = `
-    <div class="small">${area.icon} ${area.name} · Turn ${b.turn}</div>
+    <div class="small">${tier.icon} ${tier.name} · Danger level ${m.tier} · Turn ${b.turn}</div>
     <h2 id="battle-title">${m.icon} ${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}</h2>
     <div class="fighters">
       <div class="fighter">
@@ -1351,7 +1443,7 @@ function buildSouls() {
       <div class="name">🔁 Reincarnate</div>
       <div class="small">Start over to earn Souls. The deeper you got in Adventure and the more coins you earned this run, the more Souls you get.</div>
       <div class="souls-preview">
-        <div class="row"><span>Deepest monster beaten</span><span class="num" data-k="depth"></span></div>
+        <div class="row"><span>Progress this run</span><span class="num" data-k="depth"></span></div>
         <div class="row"><span>Souls from monsters</span><span class="num" data-k="fromMonsters"></span></div>
         <div class="row"><span>Coins earned this run</span><span class="num" data-k="runCoins"></span></div>
         <div class="row"><span>Souls from coins</span><span class="num" data-k="fromCoins"></span></div>
@@ -1361,7 +1453,7 @@ function buildSouls() {
       <div class="buttons"><button class="danger" data-k="open">Reincarnate…</button></div>
       <div class="confirm" data-k="confirm" hidden>
         <div class="name">Are you sure?</div>
-        <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, all gear (in your bag and equipped), unspent essences, monster progress and rest timers.</div>
+        <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, all gear (in your bag and equipped), unspent essences, danger level and waiting monsters.</div>
         <div class="small"><b>You keep:</b> learned skills and their levels, skill slots, Souls and attributes.</div>
         <div class="small"><b>Next run:</b> <span data-k="nextPrices"></span></div>
         <div class="buttons">
@@ -1394,8 +1486,7 @@ function renderSouls() {
 
   const p = soulsPreview();
   const rb = refs.rebirth;
-  const deepest = p.depth > 0 ? MONSTERS[p.depth - 1] : null;
-  set(rb, "depth", deepest ? `${deepest.icon} ${deepest.name} (#${p.depth})` : "None yet");
+  set(rb, "depth", p.depth > 0 ? `Danger level ${currentTier()}, ${p.depth} of ${TIERS.length * 5}` : "None yet");
   set(rb, "fromMonsters", fmt(p.fromMonsters));
   set(rb, "runCoins", fmt(state.runCoins));
   set(rb, "fromCoins", fmt(p.fromCoins));
@@ -1578,6 +1669,12 @@ function start() {
     if (gained.length) log(`Welcome back! Your miners dug up ${gained.join(", ")} ore.`);
   }
 
+  const spawned = updateSpawns();
+  if (spawned > 0) {
+    const before = document.getElementById("log").textContent;
+    log(`${before} ${spawned} new monster${spawned > 1 ? "s" : ""} appeared while you were away.`.trim());
+  }
+
   buildUI();
   if (state.battle) openBattle(); // pick up a fight that was going on when the page closed
 
@@ -1586,6 +1683,7 @@ function start() {
     const now = performance.now();
     addOre((now - last) / 1000);
     last = now;
+    updateSpawns();
     render();
   }, 100);
 

@@ -207,6 +207,10 @@ h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: u
 .drop .small { font-weight: 400; }
 .monster.boss { border-color: var(--accent); }
 .boss-tag { background: var(--accent); }
+.tier-low { opacity: 0.7; }
+.spawn-head { display: flex; justify-content: space-between; gap: 8px; }
+.spawn-head .num { text-transform: none; letter-spacing: 0; }
+.danger-level { border-color: var(--accent); }
 
 /* Battle window */
 .battle-overlay {
