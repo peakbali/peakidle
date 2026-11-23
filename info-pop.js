@@ -200,7 +200,7 @@ function openInfoPop(anchor, pinned) {
   infoPop.anchor = anchor;
   infoPop.pinned = pinned;
   infoPop.html = html;
-  pop.innerHTML = `<button class="ip-close" type="button" aria-label="Close">✕</button><div class="ip-body">${html}</div>`;
+  pop.innerHTML = emo(`<button class="ip-close" type="button" aria-label="Close">✕</button><div class="ip-body">${html}</div>`);
   pop.querySelector(".ip-close").onclick = closeInfoPop;
   pop.hidden = false;
   placeInfoPop();
@@ -272,7 +272,7 @@ function refreshInfoPop() {
     infoPop.html = html;
     const body = infoPop.el.querySelector(".ip-body");
     const scroll = infoPop.el.scrollTop;
-    body.innerHTML = html;
+    body.innerHTML = emo(html);
     infoPop.el.scrollTop = scroll;
   }
   placeInfoPop();

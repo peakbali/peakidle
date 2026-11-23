@@ -106,6 +106,8 @@ details.hint summary, .menu-btn, .bt-top, .bt-hpnum, .st {
 /* Pixel-art icons from icons.js */
 .px-icon { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 .px-slot { display: inline-block; flex: none; }
+/* Small pixel icons inside text (they replace emoji, see emo() in icons.js): sized to the font. */
+svg.px-icon.ti, .px-slot.ti-slot { display: inline-block; width: 1.15em; height: 1.15em; vertical-align: -0.22em; flex: none; }
 
 /* ---------- Header: a slim HUD bar ---------- */
 header.hud {

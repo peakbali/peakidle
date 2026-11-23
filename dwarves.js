@@ -193,8 +193,8 @@ function updateDwarf(box, oreId, miners) {
   const sp = dwarfSpeed(miners);
   const [main, next] = dwarfCaption(miners);
   const a = box.querySelector(".dw-speed"), b = box.querySelector(".dw-next");
-  if (a && a.textContent !== main) a.textContent = main;
-  if (b && b.textContent !== next) b.textContent = next;
+  setIconText(a, main);
+  setIconText(b, next);
   if (box.dataset.speed === String(sp)) return;
   box.dataset.speed = String(sp);
   const fig = box.querySelector(".dwarf");

@@ -350,7 +350,7 @@ function openAvatarEditor() {
         <button type="button" class="av-step" data-key="${key}" data-step="1" aria-label="Next ${o.label.toLowerCase()}">▶</button>
       </div></div>`;
   }).join("");
-  box.innerHTML = `
+  box.innerHTML = emo(`
     <div class="av-card" role="dialog" aria-modal="true" aria-labelledby="av-title">
       <h3 id="av-title">Your hero</h3>
       <div class="av-body">
@@ -369,7 +369,7 @@ function openAvatarEditor() {
         <button type="button" class="av-save primary">Save</button>
         <button type="button" class="av-cancel">Cancel</button>
       </div>
-    </div>`;
+    </div>`);
   const nameInput = box.querySelector("#av-name");
   nameInput.value = avatarDraft.name;
   nameInput.addEventListener("input", () => { avatarDraft.name = nameInput.value; renderAvatarEditor(); });
