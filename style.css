@@ -1570,3 +1570,84 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   .drops .drop { font-size: 15px; padding: 4px 1px; }
   .drops .drop .num { font-size: 17px; }
 }
+
+/* ---------- Info windows (info-pop.js) ----------
+   Tap (or hover on a computer) a skill or monster picture for a small pixel window with its details. */
+[data-info] { cursor: help; -webkit-tap-highlight-color: transparent; }
+.mon-pic, .boss-stage, .sk-frame { position: relative; }
+/* A small "i" badge in the corner of pictures, so it's clear you can tap them */
+.info-dot, .info-i {
+  font-family: var(--px); font-size: 15px; line-height: 1; font-weight: 400; font-style: normal;
+  width: 18px; height: 18px; display: grid; place-items: center;
+  color: #1b1208; background: var(--accent-hi);
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.25), 0 0 0 2px var(--outline);
+}
+.info-dot { position: absolute; top: 5px; right: 5px; z-index: 4; pointer-events: none; opacity: 0.85; }
+.info-i.inline { display: inline-grid; width: 15px; height: 15px; font-size: 13px; margin-left: 6px; vertical-align: 2px; cursor: help; }
+.bt-spot.foe .bt-sprite[data-info] { cursor: help; }
+
+/* Battle skill buttons: the button casts, the "i" in its corner opens the info window */
+.sk-act { position: relative; display: grid; }
+.sk-act > .skill { width: 100%; padding-right: 22px; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.sk-act > .skill:disabled { pointer-events: none; }
+.actions .info-i {
+  position: absolute; top: 3px; right: 3px; z-index: 2;
+  min-height: 0; padding: 0; border: 0; border-radius: 0; cursor: help;
+}
+.actions .info-i::before { content: ""; position: absolute; inset: -8px; } /* bigger finger target */
+
+.info-pop {
+  position: fixed; z-index: 300; left: 0; top: 0;
+  width: min(330px, calc(100vw - 16px));
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 10px 12px 12px;
+  background: var(--stone-tex), linear-gradient(180deg, #2f2621, #1d1713);
+  box-shadow: var(--frame), 0 14px 30px rgba(0, 0, 0, 0.6);
+  font-size: 13px; line-height: 1.3;
+  animation: ip-in 0.12s steps(3) both;
+}
+@keyframes ip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ip-close {
+  position: absolute; top: 6px; right: 6px; z-index: 1;
+  width: 28px; height: 28px; min-height: 0; padding: 0; font-size: 14px; line-height: 1;
+}
+.ip-head { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; padding-right: 26px; }
+.ip-pic {
+  width: 64px; height: 64px; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 45%, var(--mc-soft, #2c2420), #15100d 75%);
+  border: 2px solid var(--outline);
+  box-shadow: inset 0 0 0 2px #5b5048, inset 0 0 0 4px #241c17;
+}
+.ip-pic svg, .ip-pic .mon-art { width: 52px; height: 52px; display: block; }
+.ip-mon .mon-art { width: 56px; height: 56px; }
+.ip-mon .mon-emoji { font-size: 40px; width: auto; height: auto; }
+.ip-name { font-family: var(--px); font-size: 24px; line-height: 1; color: var(--accent-hi); text-shadow: 2px 2px 0 #000; }
+.ip-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; align-items: center; }
+.ip-tags .tag { margin-left: 0; font-size: 14px; }
+.ip-tags .el { font-size: 14px; }
+.ip-desc { margin: 8px 0 6px; color: var(--text); }
+.ip-desc b { color: var(--accent-hi); }
+.ip-rows { display: grid; gap: 2px; margin-top: 6px; }
+.ip-row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; background: rgba(0, 0, 0, 0.22); }
+.ip-row:nth-child(odd) { background: rgba(0, 0, 0, 0.32); }
+.ip-k { color: var(--muted); white-space: nowrap; }
+.ip-v { text-align: right; }
+.ip-v b { font-family: var(--px); font-size: 18px; line-height: 0.9; font-weight: 400; color: var(--text); }
+.ip-big .ip-v b { font-size: 21px; color: var(--accent-hi); }
+.ip-dim { color: var(--muted); font-size: 12px; }
+.ip-good { color: var(--good); font-size: 12px; white-space: nowrap; }
+.ip-bad { color: var(--bad); font-size: 12px; white-space: nowrap; }
+.ip-note { margin-top: 4px; padding: 5px 7px; color: var(--muted); background: rgba(0, 0, 0, 0.22); border-left: 3px solid var(--accent-dim); }
+.ip-note b { color: var(--text); font-weight: 600; }
+.ip-list { line-height: 1.45; }
+.ip-sub { margin: 9px 0 0; font-family: var(--px); font-size: 17px; line-height: 1; color: var(--accent); }
+.ip-foot { margin-top: 7px; font-size: 11px; color: var(--muted); }
+.ip-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-top: 8px; }
+.ip-stats div { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 6px; background: rgba(0, 0, 0, 0.3); }
+.ip-stats span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.ip-stats b { font-family: var(--px); font-size: 18px; line-height: 0.9; font-weight: 400; }
+@media (max-width: 700px) {
+  .info-dot { width: 16px; height: 16px; font-size: 13px; top: 4px; right: 4px; }
+  .info-pop { font-size: 12.5px; }
+}
+.sk-slot.empty .info-dot { display: none; }

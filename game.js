@@ -1747,9 +1747,9 @@ function monsterCard(m) {
   const lower = m.tier < currentTier();
   const card = el(`
     <div class="card monster mon-card">
-      <div class="mon-pic mon-bg-${m.element}">${monsterArtHTML(m)}</div>
+      <div class="mon-pic mon-bg-${m.element}" data-info="mon:${m.uid}">${monsterArtHTML(m)}<span class="info-dot" aria-hidden="true">i</span></div>
       <div class="mon-body">
-        <div class="mon-name"><span class="name">${m.name}</span>
+        <div class="mon-name"><span class="name" data-info="mon:${m.uid}">${m.name}</span>
           <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></div>
         <div class="mon-tags">${elementTag(m.element)}${chestButton(m)}</div>
         <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}</div>
@@ -1785,12 +1785,13 @@ function bossShowcase(m) {
   const card = el(`
     <div class="boss-show mon-bg-${m.element}">
       <div class="boss-top"><span class="tag boss-tag">Boss</span><span class="tag">Lv ${m.tier}</span>${elementTag(m.element)}</div>
-      <div class="boss-stage">
+      <div class="boss-stage" data-info="boss:${m.tier}">
         <div class="boss-aura"></div>
         <div class="boss-sparks">${bossParticles(14)}</div>
         ${monsterArtHTML(m)}
+        <span class="info-dot" aria-hidden="true">i</span>
       </div>
-      <div class="boss-name">${m.name}</div>
+      <div class="boss-name" data-info="boss:${m.tier}">${m.name}</div>
       ${info.title ? `<div class="boss-title">${info.title}</div>` : ""}
       ${info.desc ? `<div class="boss-desc">${info.desc}</div>` : ""}
       ${info.story ? `<div class="boss-story">${info.story}</div>` : ""}
@@ -1812,7 +1813,7 @@ function bossConquered() {
   const m = bossMonster(TIERS.length);
   return el(`
     <div class="boss-show beaten mon-bg-${m.element}">
-      <div class="boss-stage"><div class="boss-aura"></div>${monsterArtHTML(m)}<div class="boss-trophy">🏆</div></div>
+      <div class="boss-stage" data-info="boss:${m.tier}"><div class="boss-aura"></div>${monsterArtHTML(m)}<div class="boss-trophy">🏆</div></div>
       <div class="boss-name">${m.name} is defeated</div>
       <div class="boss-desc">The ${last.icon} ${last.name} is yours! Reincarnate in the Souls panel for a big Souls reward and climb again.</div>
     </div>`);
@@ -1949,7 +1950,7 @@ function buildBattleScreen() {
         <div class="bt-info foe" data-k="foeInfo"></div>
         <div class="bt-spot foe${m.boss ? " boss" : ""} mon-bg-${m.element}">
           ${m.boss ? `<div class="boss-aura"></div><div class="boss-sparks">${bossParticles(12)}</div>` : ""}
-          <div class="bt-sprite" data-k="foeSprite">${monsterArtHTML(m)}</div>
+          <div class="bt-sprite" data-k="foeSprite" data-info="foe">${monsterArtHTML(m)}</div>
           <div class="bt-pad"></div>
           <div class="bt-fx" data-k="foeFx"></div>
         </div>
@@ -1989,7 +1990,7 @@ function renderBattle() {
   battlePart("turn").textContent = b.result ? "" : `Turn ${b.turn}`;
 
   battlePart("foeInfo").innerHTML = `
-    <div class="row"><span class="name">${m.name}${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
+    <div class="row"><span class="name" data-info="foe">${m.name}<span class="info-i inline" aria-hidden="true">i</span>${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
     ${hpBar(b.monsterHp, m.stats.hp)}
     <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`;
 
@@ -2014,6 +2015,7 @@ function renderBattle() {
   logBox.scrollTop = logBox.scrollHeight;
 
   renderBattleMenu();
+  if (typeof refreshInfoPop === "function") refreshInfoPop();
 }
 
 function renderBattleMenu() {
@@ -2049,8 +2051,11 @@ function renderBattleMenu() {
       if (!sk) return `<button class="skill" disabled title="Buy skills in the Skills panel and equip them before a fight">Empty skill slot</button>`;
       const cost = skillGrade(sk).mana;
       const st = sk.status ? ` ${STATUS[sk.status].icon}` : "";
-      return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${!myTurn || b.mana < cost ? "disabled" : ""}
-        title="${sk.desc}"><span class="sk-mini">${skillArtSVG(sk.id)}</span> ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>`;
+      // Tap = cast. The little "i" (or press and hold, or hover on a computer) opens the skill's info window.
+      return `<div class="sk-act" data-info="skill:${sk.id}" data-info-level="${slot.level}">
+        <button class="skill ready el-${sk.element}" data-a="skill${i}" data-info-press ${!myTurn || b.mana < cost ? "disabled" : ""}><span class="sk-mini">${skillArtSVG(sk.id)}</span> ${sk.name}${st} <span class="small">Lv ${slot.level} · 💧${cost}</span></button>
+        <button class="info-i" type="button" aria-label="About ${sk.name}" data-info="skill:${sk.id}" data-info-level="${slot.level}">i</button>
+      </div>`;
     }).join("");
     html = `
       <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack</button>
@@ -2159,6 +2164,7 @@ function runMonsterTurn() {
 }
 
 function showPromptBanner(text) {
+  if (typeof closeInfoPop === "function") closeInfoPop();
   const prompt = battlePart("prompt");
   prompt.hidden = false;
   prompt.className = "bt-prompt banner";
@@ -2171,6 +2177,7 @@ function startReaction(p) {
   const m = b.monster;
   const prompt = battlePart("prompt");
   const windowMs = reactionWindow();
+  if (typeof closeInfoPop === "function") closeInfoPop(); // never cover the dodge prompt
   const title = p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
   prompt.hidden = false;
   prompt.className = "bt-prompt now";
@@ -2266,7 +2273,7 @@ function buildMerchant() {
   for (let i = 0; i < BATTLE.skillSlots; i++) {
     const slot = el(`
       <div class="sk-slot">
-        <div class="eq-frame sk-frame"><div class="sk-art" data-k="art"></div></div>
+        <div class="eq-frame sk-frame" data-k="frame"><div class="sk-art" data-k="art"></div><span class="info-dot" aria-hidden="true">i</span></div>
         <div class="sk-name" data-k="skill"></div>
         <div class="sk-meta" data-k="info"></div>
         <button class="sk-btn" data-k="remove">Remove</button>
@@ -2289,8 +2296,8 @@ function buildMerchant() {
       const g = skillGrade(sk);
       const card = el(`
         <div class="sk-card el-${e.id}">
-          <div class="eq-frame sk-frame"><div class="sk-art">${skillArtSVG(sk.id)}</div></div>
-          <div class="sk-name">${sk.name}</div>
+          <div class="eq-frame sk-frame" data-info="skill:${sk.id}"><div class="sk-art">${skillArtSVG(sk.id)}</div><span class="info-dot" aria-hidden="true">i</span></div>
+          <div class="sk-name" data-info="skill:${sk.id}">${sk.name}</div>
           <div class="sk-meta" data-k="meta"></div>
           <button class="primary sk-btn" data-k="buy"></button>
           <button class="sk-btn" data-k="equip">Equip</button>
@@ -2302,19 +2309,6 @@ function buildMerchant() {
     }
     box.appendChild(row);
   }
-}
-
-// What a skill does at a level, in numbers, using your current stats.
-function skillEffectText(sk, level) {
-  const hero = heroStats();
-  const lvl = skillLevelMult(Math.max(1, level));
-  const parts = [];
-  if (sk.power) {
-    const per = Math.round(hero.attack * sk.power * lvl * skillBoost(sk));
-    parts.push(`${sk.hits ? `${sk.hits} × ` : ""}${fmt(per)} strength`);
-  }
-  if (sk.heal) parts.push(`heals ${fmt(Math.round(hero.hp * sk.heal * lvl * skillBoost(sk)))} HP`);
-  return parts.join(", ");
 }
 
 // "Lv 3 💧1": level (or grade) and mana cost, each part kept on one line.
@@ -2335,7 +2329,11 @@ function renderMerchant() {
     const info = sk ? skillMetaHTML(`Lv ${skillLevel(id)}`, skillGrade(sk).mana) : "Pick one below";
     const infoEl = slot.querySelector('[data-k="info"]');
     if (infoEl.innerHTML !== info) infoEl.innerHTML = info;
-    slot.title = sk ? `${sk.desc} Now: ${skillEffectText(sk, skillLevel(id))}.` : "";
+    // Tap or hover the picture of an equipped skill for its info window.
+    for (const part of [slot.querySelector('[data-k="frame"]'), slot.querySelector('[data-k="skill"]')]) {
+      if (sk) part.dataset.info = `skill:${sk.id}`;
+      else delete part.dataset.info;
+    }
     slot.className = "sk-slot" + (sk ? ` el-${sk.element}` : " empty");
     slot.querySelector('[data-k="remove"]').hidden = !sk;
   });
@@ -2349,9 +2347,7 @@ function renderMerchant() {
     const meta = skillMetaHTML(level > 0 ? `Lv ${level}` : skillGrade(sk).name, skillGrade(sk).mana);
     const metaEl = card.querySelector('[data-k="meta"]');
     if (metaEl.innerHTML !== meta) metaEl.innerHTML = meta;
-    // The full description and numbers show when you hover (or long-press) the card.
-    const tip = `${sk.desc} ${level > 0 ? "Now: " : ""}${skillEffectText(sk, Math.max(1, level))}.`;
-    if (card.title !== tip) card.title = tip;
+    // The full description and numbers are in the info window (tap or hover the picture, see info-pop.js).
     const buy = card.querySelector('[data-k="buy"]');
     const label = `${level > 0 ? "Level up" : "Buy"} <span class="nw">${fmt(cost)} ${e.icon}</span>`;
     if (buy.dataset.label !== label) { buy.dataset.label = label; buy.innerHTML = label; }
@@ -2746,6 +2742,7 @@ function render() {
 
   renderAdventure();
   renderMerchant();
+  if (typeof refreshInfoPop === "function") refreshInfoPop();
 
   const hero = heroStats();
   const gear = gearStats();
