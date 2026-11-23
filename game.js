@@ -2522,15 +2522,28 @@ function set(root, key, text) {
 }
 
 // Header: how much of each opened ore you have, next to your coins.
+// Every ore gets a chip. Desktop hides the locked ones; phones show them dimmed
+// so the 2 x 5 grid never jumps around. Phones also use a shorter number (1.2K).
+function fmtShort(n) {
+  n = Math.floor(n);
+  if (n < 1000) return String(n);
+  const units = ["K", "M", "B", "T", "Qa", "Qi", "Sx"];
+  let i = -1;
+  while (n >= 1000 && i < units.length - 1) { n /= 1000; i++; }
+  return (n < 10 ? Math.floor(n * 10) / 10 : Math.floor(n)) + units[i];
+}
 function renderOreBar() {
   const bar = document.getElementById("ore-bar");
   if (!bar.children.length) {
-    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${oreIcon(o)} <span class="num" data-k="n">0</span></span>`));
+    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip locked" data-ore="${o.id}" title="${o.name} ore">${oreIcon(o)} <span class="num ore-long" data-k="n">0</span><span class="num ore-short" data-k="s">0</span></span>`));
   }
   for (const o of ORES) {
     const chip = bar.querySelector(`[data-ore="${o.id}"]`);
-    chip.hidden = !state.unlocked[o.id];
-    if (!chip.hidden) set(chip, "n", fmt(state.ore[o.id]));
+    const open = !!state.unlocked[o.id];
+    chip.classList.toggle("locked", !open);
+    chip.title = open ? `${o.name} ore` : `${o.name} ore (mine not opened yet)`;
+    set(chip, "n", open ? fmt(state.ore[o.id]) : "");
+    set(chip, "s", open ? fmtShort(state.ore[o.id]) : "-");
   }
 }
 
