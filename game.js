@@ -105,7 +105,7 @@ const ANVIL   = { start: 300, growth: 5 };      // anvil level 1 -> 2 costs 300,
 // progress reset. You keep learned skills, Souls and attributes, and you earn new Souls.
 const REINCARNATION = {
   priceGrowth: 1.10,     // every reincarnation makes miners, mines and upgrades 10% pricier (stacks).
-                         //   Merchant skill prices never go up with reincarnation.
+                         //   Skill prices never go up with reincarnation.
   soulsPerDepth: 2,      // Souls from monsters = soulsPerDepth x depth ^ depthPower, where depth = 5 per boss beaten
   depthPower: 1.4,       //   + 1 per win (up to 4) against monsters of your own tier. 1st boss = 19 Souls, last boss = 132 Souls
   coinsPerSoul: 500,     // Souls from coins = square root of (coins earned this run / coinsPerSoul)
@@ -153,7 +153,7 @@ function elementMultiplier(attackEl, targetEl) {
 
 // ---------- Skills ----------
 
-// The merchant sells 15 skills: 3 grades for each element.
+// The Skills panel sells 15 skills: 3 grades for each element.
 // Grade 1/2/3 costs 1/2/3 mana in battle. Skills are bought and levelled up with essences of their element.
 //   cost: essences to buy (rises steeply by grade)
 const SKILL_GRADES = [
@@ -249,7 +249,7 @@ const BATTLE = {
   startMana: 3,
   manaPerTurn: 1,
   maxMana: 5,
-  skillSlots: 3,          // equip skills from the merchant into these
+  skillSlots: 3,          // equip skills from the Skills panel into these
   critMultiplier: 2,      // a critical hit does double damage; crit chance = luck %
   heavyEvery: 3,          // monsters wind up a heavy attack every 3rd turn
   heavyMultiplier: 1.8,
@@ -667,7 +667,7 @@ function unequip(slotId) {
   render();
 }
 
-// ---------- Merchant actions ----------
+// ---------- Skills actions ----------
 
 // Buy a skill, or level it up if you already own it. Paid with essences of its element.
 function buySkill(skillId) {
@@ -1271,7 +1271,7 @@ function renderBattle() {
   const skills = Array.from({ length: BATTLE.skillSlots }, (_, i) => {
     const slot = (b.skills || [])[i];
     const sk = slot && skillById[slot.id];
-    if (!sk) return `<button class="skill" disabled title="Buy skills from the Merchant and equip them before a fight">Empty skill slot ${i + 1}</button>`;
+    if (!sk) return `<button class="skill" disabled title="Buy skills in the Skills panel and equip them before a fight">Empty skill slot ${i + 1}</button>`;
     const mana = skillGrade(sk).mana;
     return `<button class="skill ready el-${sk.element}" data-a="skill${i}" ${b.mana < mana ? "disabled" : ""}
       title="${sk.desc}">${elementById[sk.element].icon} ${sk.name} <span class="small">Lv ${slot.level} · 💧${mana}</span></button>`;
@@ -1320,7 +1320,7 @@ function renderBattle() {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-// ---------- Merchant ----------
+// ---------- Skills panel ----------
 
 function buildMerchant() {
   refs.skillSlots = [];
@@ -1360,6 +1360,7 @@ function buildMerchant() {
           <div class="buttons">
             <button class="primary" data-k="buy"></button>
             <button data-k="equip">Equip</button>
+            <span class="have" data-k="have"></span>
           </div>
         </div>`);
       card.querySelector('[data-k="buy"]').onclick = () => buySkill(sk.id);
@@ -1407,7 +1408,13 @@ function renderMerchant() {
     const buy = card.querySelector('[data-k="buy"]');
     const label = `${level > 0 ? `Level up to ${level + 1}` : "Buy"} for ${fmt(cost)} ${e.icon}`;
     if (buy.textContent !== label) buy.textContent = label;
-    buy.disabled = state.drops[sk.element] < cost;
+    const have = state.drops[sk.element] || 0;
+    buy.disabled = have < cost;
+    // How many essences of this element you have, green if enough, red if not.
+    set(card, "have", `you have ${fmt(have)} ${e.icon}`);
+    const haveEl = card.querySelector('[data-k="have"]');
+    haveEl.classList.toggle("enough", have >= cost);
+    haveEl.classList.toggle("short", have < cost);
     const equip = card.querySelector('[data-k="equip"]');
     const equipped = state.skillSlots.includes(sk.id);
     const eqLabel = equipped ? "Equipped" : "Equip";
@@ -1499,7 +1506,7 @@ function renderSouls() {
   set(rb, "fromCoins", fmt(p.fromCoins));
   set(rb, "gain", `+${fmt(p.total)} 👻`);
   const nextMult = runPriceMult() * REINCARNATION.priceGrowth;
-  set(rb, "priceNote", `Each reincarnation makes miners, mines and upgrades ${Math.round((REINCARNATION.priceGrowth - 1) * 100)}% pricier. Merchant skills always keep the same price. Prices now: ×${runPriceMult().toFixed(2)}.`);
+  set(rb, "priceNote", `Each reincarnation makes miners, mines and upgrades ${Math.round((REINCARNATION.priceGrowth - 1) * 100)}% pricier. Skills always keep the same price. Prices now: ×${runPriceMult().toFixed(2)}.`);
   set(rb, "nextPrices", `miners, mines and upgrades cost ×${nextMult.toFixed(2)} of their starting price. Skill prices stay the same.`);
   set(rb, "yes", `Yes, reincarnate for +${fmt(p.total)} 👻`);
   const openBtn = rb.querySelector('[data-k="open"]');
