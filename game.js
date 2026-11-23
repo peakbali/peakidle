@@ -1828,7 +1828,7 @@ function buildAdventure() {
   const dropsBox = document.getElementById("drops");
   dropsBox.innerHTML = "";
   for (const e of ELEMENTS) {
-    const chip = el(`<div class="drop el-${e.id}" title="${e.drop}: dropped by ${e.name} monsters">${e.icon} <span class="num" data-k="n"></span> <span class="small">${e.drop}</span></div>`);
+    const chip = el(`<div class="drop el-${e.id}" title="${e.drop}: dropped by ${e.name} monsters">${e.icon} <span class="num" data-k="n"></span></div>`);
     refs.drops[e.id] = chip;
     dropsBox.appendChild(chip);
   }
@@ -1836,9 +1836,14 @@ function buildAdventure() {
   const box = document.getElementById("areas");
   box.innerHTML = "";
   const tier = TIERS[currentTier() - 1];
-  box.appendChild(el(`<div class="card danger-level">
-    <div class="row"><span class="name">⚠️ Danger level ${currentTier()} of ${TIERS.length}</span><span>${tier.icon} ${tier.name}</span></div>
-    <div class="small">${peakCleared() ? "You conquered every boss. Reincarnate for Souls and climb again!" : "Beat the boss below to raise the danger level."}</div>
+  // The current zone, with its own pixel landscape faintly behind it (zone-art.js).
+  box.appendChild(el(`<div class="danger-level zone-${currentTier()}">
+    <div class="zone-bg">${zoneArtSVG(currentTier())}</div>
+    <div class="dl-level"><span class="dl-small">Danger level</span><span class="dl-big">${currentTier()}</span><span class="dl-small">of ${TIERS.length}</span></div>
+    <div class="dl-zone">
+      <div class="dl-name">${tier.name}</div>
+      <div class="small">${peakCleared() ? "You conquered every boss. Reincarnate for Souls and climb again!" : "Beat the boss below to raise the danger level."}</div>
+    </div>
   </div>`));
 
   refs.spawnTimer = el(`<h3 class="spawn-head"><span>Monsters <span class="num" data-k="count"></span></span> <span class="num" data-k="timer"></span></h3>`);
@@ -1864,7 +1869,7 @@ function buildAdventure() {
 
 function renderAdventure() {
   if (refs.adventureKey !== adventureKey()) buildAdventure();
-  for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmt(state.drops[e.id]));
+  for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmtShort(state.drops[e.id]));
   set(refs.spawnTimer, "count", `${state.spawns.length}/${SPAWN.max}`);
   set(refs.spawnTimer, "timer", state.nextSpawnAt === null
     ? "Full: timer paused"
