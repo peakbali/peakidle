@@ -255,6 +255,8 @@ button.primary .el { color: #1d1b19; background: rgba(0, 0, 0, 0.12); border-col
 
 /* Souls and reincarnation */
 .header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ore-bar { display: flex; gap: 4px 12px; flex-wrap: wrap; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ore-chip[hidden] { display: none; }
 .souls-bar { font-size: 15px; font-weight: 600; color: #c9b6ff; font-variant-numeric: tabular-nums; }
 .attr .stats-line { margin: 0; font-weight: 600; }
 .rebirth { border-color: #7a6aa8; }
@@ -278,6 +280,7 @@ button.primary .el { color: #1d1b19; background: rgba(0, 0, 0, 0.12); border-col
   body[data-view="menu"] .menu-btn { display: none; }
   .header-right { gap: 4px 12px; }
   .souls-bar .small { display: none; }
+  .ore-bar { font-size: 14px; gap: 2px 8px; }
 
   /* One panel at a time: hide every panel except the one that is open. */
   main { padding: 10px; }

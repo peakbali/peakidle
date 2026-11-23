@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <header>
     <button id="menu-btn" class="menu-btn" type="button" aria-label="Back to the main menu">🏠 Menu</button>
     <h1>⛏️ Peak Idle</h1>
     <div class="header-right">
-      <div id="souls-bar" class="souls-bar" title="Souls are earned by reincarnating. Prices go up a little with every reincarnation.">👻 <span data-k="souls">0</span> Souls <span class="small">· Reincarnations: <span data-k="lives">0</span> · Prices ×<span data-k="priceMult">1.00</span></span></div>
+      <div id="souls-bar" class="souls-bar" title="Souls are earned by reincarnating. Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do.">👻 <span data-k="souls">0</span> Souls <span class="small">· Reincarnations: <span data-k="lives">0</span> · Prices ×<span data-k="priceMult">1.00</span></span></div>
+      <div id="ore-bar" class="ore-bar" aria-label="Your ore"></div>
       <div class="coins">🪙 <span id="coins">0</span> coins</div>
     </div>
   </header>
@@ -92,7 +93,7 @@
     <div class="battle-box" role="dialog" aria-modal="true" aria-labelledby="battle-title"></div>
   </div>
 
-  <script src="game.js?v=10"></script>
-  <script src="menu.js?v=10"></script>
+  <script src="game.js?v=11"></script>
+  <script src="menu.js?v=11"></script>
 </body>
 </html>

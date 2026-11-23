@@ -104,7 +104,8 @@ const ANVIL   = { start: 300, growth: 5 };      // anvil level 1 -> 2 costs 300,
 // Reincarnating starts a new run: coins, ore, miners, mines, upgrades, gear, essences and monster
 // progress reset. You keep learned skills, Souls and attributes, and you earn new Souls.
 const REINCARNATION = {
-  priceGrowth: 1.25,     // every reincarnation makes miners, mines, upgrades and skills 25% pricier (stacks)
+  priceGrowth: 1.10,     // every reincarnation makes miners, mines and upgrades 10% pricier (stacks).
+                         //   Merchant skill prices never go up with reincarnation.
   soulsPerDepth: 2,      // Souls from monsters = soulsPerDepth x depth ^ depthPower, where depth = 5 per boss beaten
   depthPower: 1.4,       //   + 1 per win (up to 4) against monsters of your own tier. 1st boss = 19 Souls, last boss = 132 Souls
   coinsPerSoul: 500,     // Souls from coins = square root of (coins earned this run / coinsPerSoul)
@@ -497,7 +498,7 @@ function bagCount(r) { return itemKeysOf(r).reduce((n, k) => n + state.items[k],
 // ---------- Skill rules ----------
 
 function skillLevel(id) { return state.skills[id] || 0; }
-function skillBuyCost(sk) { return Math.ceil(skillGrade(sk).cost * runPriceMult()); }
+function skillBuyCost(sk) { return skillGrade(sk).cost; } // same price in every run
 function skillLevelCost(sk) {
   return Math.ceil(skillBuyCost(sk) * SKILL_LEVEL_COST_START * Math.pow(SKILL_LEVEL_COST_GROWTH, skillLevel(sk.id) - 1));
 }
@@ -1492,8 +1493,8 @@ function renderSouls() {
   set(rb, "fromCoins", fmt(p.fromCoins));
   set(rb, "gain", `+${fmt(p.total)} 👻`);
   const nextMult = runPriceMult() * REINCARNATION.priceGrowth;
-  set(rb, "priceNote", `Each reincarnation makes miners, mines, upgrades and skills ${Math.round((REINCARNATION.priceGrowth - 1) * 100)}% pricier. Prices now: ×${runPriceMult().toFixed(2)}.`);
-  set(rb, "nextPrices", `miners, mines, upgrades and skills cost ×${nextMult.toFixed(2)} of their starting price.`);
+  set(rb, "priceNote", `Each reincarnation makes miners, mines and upgrades ${Math.round((REINCARNATION.priceGrowth - 1) * 100)}% pricier. Merchant skills always keep the same price. Prices now: ×${runPriceMult().toFixed(2)}.`);
+  set(rb, "nextPrices", `miners, mines and upgrades cost ×${nextMult.toFixed(2)} of their starting price. Skill prices stay the same.`);
   set(rb, "yes", `Yes, reincarnate for +${fmt(p.total)} 👻`);
   const openBtn = rb.querySelector('[data-k="open"]');
   openBtn.hidden = reincarnateOpen;
@@ -1579,8 +1580,22 @@ function set(root, key, text) {
   if (node && node.textContent !== text) node.textContent = text;
 }
 
+// Header: how much of each opened ore you have, next to your coins.
+function renderOreBar() {
+  const bar = document.getElementById("ore-bar");
+  if (!bar.children.length) {
+    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${o.icon} <span class="num" data-k="n">0</span></span>`));
+  }
+  for (const o of ORES) {
+    const chip = bar.querySelector(`[data-ore="${o.id}"]`);
+    chip.hidden = !state.unlocked[o.id];
+    if (!chip.hidden) set(chip, "n", fmt(state.ore[o.id]));
+  }
+}
+
 function render() {
   document.getElementById("coins").textContent = fmt(state.coins);
+  renderOreBar();
 
   for (const o of ORES) {
     const card = refs.ores[o.id];
