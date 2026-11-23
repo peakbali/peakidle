@@ -226,7 +226,7 @@ const TIERS = [
 const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", earth: "Rocky", lightning: "Charged" };
 
 const SPAWN = {
-  everyMs: 5 * 60 * 1000, // a new monster appears every 5 minutes, even while the game is closed
+  everyMs: 15 * 1000,     // a new monster appears every 15 seconds, even while the game is closed
   max: 5,                 // at most 5 monsters wait at once; the timer pauses while 5 are waiting
   newRun: 3,              // a new game or reincarnation starts with 3 monsters already waiting
   lowerTierChance: 0.4,   // 40% of spawns are one tier below yours (from tier 2 up), for variety
@@ -1148,6 +1148,12 @@ function elementTag(elementId) {
   return `<span class="el el-${e.id}">${e.icon} ${e.name}</span>`;
 }
 
+// "15 seconds" or "5 minutes", from SPAWN.everyMs.
+function spawnEveryText() {
+  const s = SPAWN.everyMs / 1000;
+  return s < 60 ? `${s} seconds` : `${s / 60} minutes`;
+}
+
 function fmtTime(ms) {
   const s = Math.ceil(ms / 1000);
   const m = Math.floor(s / 60);
@@ -1205,7 +1211,7 @@ function buildAdventure() {
   refs.spawnTimer = el(`<h3 class="spawn-head"><span>Monsters <span class="num" data-k="count"></span></span> <span class="num" data-k="timer"></span></h3>`);
   box.appendChild(refs.spawnTimer);
   if (state.spawns.length === 0) {
-    box.appendChild(el(`<div class="card locked small">No monsters around right now. A new one appears every ${SPAWN.everyMs / 60000} minutes.</div>`));
+    box.appendChild(el(`<div class="card locked small">No monsters around right now. A new one appears every ${spawnEveryText()}.</div>`));
   }
   for (const sp of state.spawns) {
     const card = monsterCard(spawnMonster(sp));
@@ -1276,7 +1282,7 @@ function renderBattle() {
     const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
     footer = `<div class="result ${b.result}">${titles[b.result]}</div>
       <div class="small">${b.result === "win"
-        ? (m.boss ? "" : `A new monster appears every ${SPAWN.everyMs / 60000} minutes.`)
+        ? (m.boss ? "" : `A new monster appears every ${spawnEveryText()}.`)
         : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
       <div class="buttons"><button class="primary" data-k="close">Back to the game</button></div>`;
   } else {
