@@ -1525,11 +1525,13 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
 }
 
 /* ---------- Adventure: essences row and the zone banner ---------- */
+/* Icon on top, number underneath, so even "12.3K" fits on small phones */
 .drops .drop {
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  padding: 5px 2px; min-width: 0; white-space: nowrap; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 5px 1px; min-width: 0; white-space: nowrap; line-height: 1; font-size: 17px;
 }
-.drops .drop .num { overflow: hidden; text-overflow: ellipsis; }
+.drops .drop .num { font-size: 20px; }
+@media (max-width: 360px) { .drops .drop .num { font-size: 17px; } }
 
 /* The danger level and zone name, over a faint pixel landscape of that zone */
 .danger-level {
@@ -1565,5 +1567,6 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   .dl-level { min-width: 52px; }
   .dl-name { font-size: 24px; }
   .drops { gap: 4px; }
-  .drops .drop { flex-direction: column; font-size: 16px; line-height: 1; padding: 4px 1px; gap: 2px; }
+  .drops .drop { font-size: 15px; padding: 4px 1px; }
+  .drops .drop .num { font-size: 17px; }
 }
