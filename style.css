@@ -331,7 +331,7 @@ div.hint { margin: 10px 0 4px; }
 .card.locked { opacity: 0.55; }
 
 /* A few rows are special: a colored stripe on the left marks them */
-.card.boss, .monster.boss, .danger-level, .rebirth {
+.card.boss, .monster.boss, .rebirth {
   padding-left: 12px;
   padding-right: 8px;
   margin: 4px 0;
@@ -565,7 +565,7 @@ footer {
 .el-lightning { color: #ffe066; background: rgba(255, 220, 80, 0.14); }
 
 /* ---------- Adventure ---------- */
-.drops { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.drops { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
 .drop {
   font-size: 18px;
   line-height: 1.1;
@@ -1522,4 +1522,48 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   .mon-art, .mon-svg *, .boss-aura, .boss-sparks i, .chest-svg, .boss-trophy,
   .vic-rays, .vic-confetti i, .vic-burst, .vic-title { animation: none !important; }
   .boss-sparks, .vic-confetti { display: none; }
+}
+
+/* ---------- Adventure: essences row and the zone banner ---------- */
+.drops .drop {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 5px 2px; min-width: 0; white-space: nowrap; overflow: hidden;
+}
+.drops .drop .num { overflow: hidden; text-overflow: ellipsis; }
+
+/* The danger level and zone name, over a faint pixel landscape of that zone */
+.danger-level {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; align-items: center; gap: 14px;
+  margin: 4px 0 6px; padding: 12px 14px; min-height: 92px;
+  background: var(--stone-dark);
+  box-shadow: inset 0 0 0 2px var(--outline), inset 0 0 0 4px rgba(240, 160, 64, 0.35), 0 3px 0 var(--outline);
+}
+.zone-bg { position: absolute; inset: 0; z-index: -1; opacity: 0.55; }
+.zone-bg .zone-svg { display: block; width: 100%; height: 100%; }
+/* Darken the left side so the text stays easy to read */
+.zone-bg::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(10, 8, 6, 0.75) 0%, rgba(10, 8, 6, 0.35) 55%, rgba(10, 8, 6, 0.1) 100%);
+}
+.dl-level { display: grid; justify-items: center; line-height: 1; flex: none; min-width: 64px; }
+.dl-small { font-family: var(--px); font-size: 14px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.dl-big {
+  font-family: var(--px); font-size: 60px; line-height: 0.85; color: var(--accent-hi);
+  text-shadow: 3px 3px 0 #6a3410, 4px 4px 0 var(--outline), 0 0 16px rgba(255, 170, 60, 0.5);
+}
+.dl-zone { display: grid; gap: 4px; min-width: 0; }
+.dl-name {
+  font-family: var(--px); font-size: 30px; line-height: 1; color: var(--text);
+  text-shadow: 2px 2px 0 var(--outline), 0 0 8px rgba(0, 0, 0, 0.8);
+}
+.danger-level .small { color: #d8cbb8; text-shadow: 1px 1px 0 var(--outline); }
+@media (min-width: 701px) {
+  .danger-level { gap: 10px; padding: 10px; min-height: 84px; }
+  .dl-big { font-size: 50px; }
+  .dl-small { font-size: 12px; }
+  .dl-level { min-width: 52px; }
+  .dl-name { font-size: 24px; }
+  .drops { gap: 4px; }
+  .drops .drop { flex-direction: column; font-size: 16px; line-height: 1; padding: 4px 1px; gap: 2px; }
 }
