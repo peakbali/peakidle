@@ -431,19 +431,36 @@ footer {
 .tab .ore-art { width: 16px; height: 16px; vertical-align: -3px; }
 .tab.sell-all { margin-left: auto; }
 
-.item-row { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: start; }
+/* One item card: [picture + Equip] on the left, [name, stats, price, Smith 1 / Smith max / Sell all] on the right.
+   Both columns stretch to the same height, and Equip grows to fill its column, so its bottom edge lines
+   up with the bottom of the Smith / Sell row. */
+.item-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: stretch; }
+.item-side { display: flex; flex-direction: column; gap: 6px; }
 .item-icon {
-  width: 40px;
-  height: 40px;
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
-  font-size: 24px;
+  font-size: 30px;
   background: var(--stone-dark);
   box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.5), inset -2px -2px 0 rgba(255, 222, 180, 0.07);
 }
+.item-row .equip-btn { flex: 1 1 auto; width: 52px; min-height: 30px; padding: 2px 0; font-size: 13px; }
+.item-main { display: flex; flex-direction: column; min-width: 0; }
 .item-main .small { font-size: 12.5px; line-height: 1.35; }
-.item-row .buttons { gap: 5px; margin-top: 7px; }
-.item-row .buttons button { font-size: 13px; padding: 3px 8px; }
+.item-cost { display: flex; gap: 12px; align-items: center; }
+.item-cost > span { display: inline-flex; align-items: center; gap: 4px; }
+.item-cost .ore-art, .item-coin, .item-coin .px-icon { width: 14px; height: 14px; display: inline-block; }
+.item-row .item-actions { gap: 5px; margin-top: auto; padding-top: 7px; flex-wrap: nowrap; }
+.item-row .item-actions button { flex: 1 1 auto; min-width: 0; font-size: 13px; padding: 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+/* Narrow desktop columns: a slimmer picture and smaller buttons so all three fit on one row. */
+@media (min-width: 701px) {
+  .item-row { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
+  .item-icon { width: 44px; height: 44px; font-size: 26px; }
+  .item-row .equip-btn { width: 44px; font-size: 12px; }
+  .item-row .item-actions { gap: 4px; }
+  .item-row .item-actions button { font-size: 12px; padding: 3px 2px; }
+}
 .bag-num { color: var(--text); }
 
 .stats-line { font-size: 13px; color: var(--good); margin: 2px 0; }
@@ -680,11 +697,7 @@ body.in-battle { overflow: hidden; }
   display: grid; gap: 8px; align-content: start;
 }
 .bt-hint { min-height: 1.3em; }
-.actions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
-.actions .skill.ready.wskill { color: #e6d3b3; }
-.st-focus { border-color: #ffd76a; }
-.wskill-line { color: #cdb894; }
-.wskill-row { margin-top: 6px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .actions button { min-height: 44px; }
 .bt-info .tag { white-space: nowrap; }
 .actions .wide { grid-column: 1 / -1; }
@@ -738,8 +751,6 @@ button.big { min-height: 52px; font-size: 16px; }
 .have.enough { color: var(--good); }
 .have.short { color: var(--bad); }
 .skill-card.owned { background: rgba(255, 222, 180, 0.035); }
-.infuse { margin-bottom: 8px; }
-.infuse .tabs { margin-top: 6px; }
 .result { font-size: 28px; margin-bottom: 4px; }
 .result.win { color: var(--good); }
 .result.lose { color: var(--bad); }
