@@ -578,6 +578,9 @@ body.in-battle { overflow: hidden; }
 .bt-spot.foe.boss .bt-sprite { font-size: clamp(80px, 17vh, 170px); }
 .bt-spot.you .bt-sprite { font-size: clamp(56px, 11vh, 110px); }
 .bt-weapon { position: absolute; right: -0.3em; bottom: 0; font-size: 0.45em; }
+/* Your hero, drawn from the look you picked in the appearance editor */
+.bt-hero .avatar { display: block; height: 1.8em; width: auto; }
+.bt-hero .bt-weapon { right: -0.15em; bottom: 0.1em; }
 .bt-pad {
   width: 75%; max-width: 240px; height: 26px; margin-top: -14px;
   border-radius: 50%; background: radial-gradient(ellipse at center, var(--pad) 0%, transparent 70%);
@@ -1028,3 +1031,78 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
 .up-card .stats-line { margin: 0; font-weight: 600; }
 .boon-price .enough { color: var(--good); }
 .boon-price .short { color: var(--bad); }
+
+/* ---------- Player profile and appearance editor ---------- */
+.avatar { image-rendering: pixelated; }
+.profile-card {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 10px 6px 6px; text-align: left;
+  --btn-bg: #3a2e25;
+}
+.profile-portrait {
+  flex: none; width: 56px; height: 56px; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, #5a4636 0%, #2a201a 75%);
+  box-shadow: inset 0 0 0 2px var(--outline), inset 0 0 0 4px #6b5240;
+}
+.profile-portrait .avatar { width: 48px; height: 48px; }
+.profile-text { display: grid; gap: 2px; min-width: 0; }
+.profile-name { font-size: 24px; line-height: 1; color: var(--accent-hi); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#panel-hero .profile-card { margin-bottom: 10px; }
+
+.av-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(6, 4, 3, 0.75);
+}
+body.in-editor { overflow: hidden; }
+.av-card {
+  width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto;
+  padding: 14px 16px 16px; display: grid; gap: 10px;
+  background-color: var(--stone); background-image: var(--stone-tex); box-shadow: var(--frame);
+}
+.av-card h3 { margin: 0; font-family: var(--px); font-size: 28px; font-weight: normal; color: var(--accent-hi); }
+.av-body { display: grid; grid-template-columns: 190px 1fr; gap: 16px; align-items: start; }
+.av-preview {
+  display: grid; justify-items: center; gap: 8px; padding: 12px 8px;
+  background: radial-gradient(ellipse at 50% 85%, rgba(240, 160, 64, 0.25), transparent 60%), var(--stone-dark);
+  box-shadow: inset 0 0 0 2px var(--outline);
+  position: sticky; top: 0;
+}
+.av-full .avatar { width: 144px; height: 192px; display: block; filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.5)); }
+.av-name { font-size: 26px; line-height: 1; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.av-random { font-size: 13px; padding: 4px 8px; }
+.av-options { display: grid; gap: 9px; }
+.av-row { display: grid; gap: 4px; }
+.av-label { font-size: 13px; color: var(--muted); }
+.av-input {
+  font: inherit; font-family: var(--px); font-size: 22px; color: var(--text);
+  background: var(--stone-dark); border: 2px solid var(--outline); padding: 3px 8px; width: 100%;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+.av-input:focus { outline: 2px solid var(--accent-hi); outline-offset: 1px; }
+.av-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.av-swatch {
+  width: 28px; height: 28px; padding: 0; background: var(--sw);
+  --btn-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.25), inset -2px -2px 0 rgba(0, 0, 0, 0.3);
+}
+.av-swatch.on { outline: 3px solid var(--accent-hi); outline-offset: 2px; }
+.av-stepper { display: grid; grid-template-columns: 40px 1fr 40px; align-items: stretch; gap: 6px; }
+.av-step { padding: 2px 0; font-size: 14px; }
+.av-value {
+  display: grid; place-items: center; font-family: var(--px); font-size: 22px; line-height: 1;
+  background: var(--stone-dark); box-shadow: inset 0 0 0 2px var(--outline); padding: 4px;
+}
+.av-actions { margin-top: 0; justify-content: flex-end; }
+.av-actions button { min-width: 110px; min-height: 40px; }
+
+@media (max-width: 700px) {
+  .av-overlay { padding: 8px; align-items: stretch; }
+  .av-card { max-height: calc(100dvh - 16px); padding: 12px; align-content: start; }
+  .av-body { grid-template-columns: 1fr; gap: 10px; }
+  .av-preview { grid-template-columns: auto 1fr; justify-items: start; align-items: center; gap: 4px 12px; z-index: 1; top: -12px; box-shadow: inset 0 0 0 2px var(--outline), 0 -12px 0 var(--stone); }
+  .av-preview .av-full { grid-row: span 2; }
+  .av-full .avatar { width: 72px; height: 96px; }
+  .av-swatch { width: 32px; height: 32px; }
+  .av-actions { position: sticky; bottom: -12px; margin: 0 -12px -12px; padding: 10px 12px; background: var(--stone); box-shadow: 0 -3px 0 var(--outline); }
+  .av-actions button { flex: 1; }
+}

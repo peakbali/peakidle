@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 9;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 10;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 
 // ---------- Game data ----------
@@ -487,6 +487,7 @@ function freshState() {
     mastery: {},          // element id -> Element Mastery level (permanent)
     reincarnations: 0,    // how many times you've reincarnated (prices go up each time)
     totalSouls: 0,        // all Souls ever earned
+    profile: normalizeProfile(null), // your hero's name and look (see avatar.js), also kept on Reset
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
@@ -564,6 +565,11 @@ function migrate(saved) {
     // at level 0 (freshState fills them in).
     saved.version = 9;
   }
+  if (saved.version < 10) {
+    // v9 -> v10: player profile (name and look). Nothing is reset: you get the default look and
+    // the name "Hero", and can change both from the settings menu.
+    saved.version = 10;
+  }
   // Later versions add their steps here.
   return saved;
 }
@@ -600,6 +606,7 @@ function load() {
         .slice(0, SPAWN.max);
       s.nextSpawnAt = typeof saved.nextSpawnAt === "number" ? saved.nextSpawnAt : null;
     }
+    s.profile = normalizeProfile(saved.profile);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
     console.warn("Could not load save", e);
@@ -1475,7 +1482,7 @@ function buyBoon(id) {
   render();
 }
 
-// Start a new run. Keeps skills, skill slots, Souls, attributes, Element Mastery and lifetime counters.
+// Start a new run. Keeps skills, skill slots, Souls, attributes, Element Mastery, your look and lifetime counters.
 function reincarnate() {
   if (state.battle) return; // finish the fight first
   const gained = soulsPreview().total;
@@ -1488,6 +1495,7 @@ function reincarnate() {
     totalSouls: state.totalSouls + gained,
     reincarnations: state.reincarnations + 1,
     totalSmithed: state.totalSmithed,
+    profile: state.profile,
   };
   state = Object.assign(freshState(), keep);
   forgeOre = "copper";
@@ -1824,7 +1832,7 @@ function buildBattleScreen() {
           <div class="bt-fx" data-k="foeFx"></div>
         </div>
         <div class="bt-spot you">
-          <div class="bt-sprite" data-k="youSprite">🧝${weapon ? `<span class="bt-weapon">${weapon.icon}</span>` : ""}</div>
+          <div class="bt-sprite bt-hero" data-k="youSprite">${avatarSVG(state.profile, "full")}${weapon ? `<span class="bt-weapon">${weapon.icon}</span>` : ""}</div>
           <div class="bt-pad"></div>
           <div class="bt-fx" data-k="youFx"></div>
         </div>
@@ -1866,7 +1874,7 @@ function renderBattle() {
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
   battlePart("youInfo").innerHTML = `
-    <div class="row"><span class="name">You</span>${elementTag(b.hero.element)}</div>
+    <div class="row"><span class="name">${avatarNameHTML(normalizeProfile(state.profile).name)}</span>${elementTag(b.hero.element)}</div>
     ${hpBar(b.heroHp, b.hero.hp)}
     <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
     <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}${b.riposte && !b.result ? `<span class="st st-guard" title="Riposte Stance: you strike back when the monster attacks">🤺</span>` : ""}${b.empower && !b.result ? `<span class="st st-focus" title="Arcane Focus: your next element skill is ${Math.round(b.empower * 100)}% stronger">🔆</span>` : ""}</div>`;
@@ -2448,6 +2456,7 @@ function buildUI() {
 
   buildForge();
   buildHero();
+  renderProfile();
   buildAdventure();
   buildMerchant();
   buildSouls();
@@ -2655,7 +2664,9 @@ function start() {
     document.getElementById("settings-pop").hidden = true;
     document.getElementById("settings-btn").setAttribute("aria-expanded", "false");
     reincarnateOpen = false;
+    const profile = state.profile; // your hero's look isn't progress, so it stays
     state = freshState();
+    state.profile = profile;
     save();
     renderBattle();
     buildUI();
