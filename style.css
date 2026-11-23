@@ -184,6 +184,11 @@ header.hud {
   padding: 14px;
   display: grid;
   gap: 8px;
+  /* Never taller than the screen: scroll inside instead. */
+  max-height: calc(100vh - 80px);
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .settings-pop[hidden] { display: none; }
 .settings-pop h3 { margin: 0; }
@@ -205,7 +210,7 @@ header.hud {
   background: rgba(6, 4, 3, 0.8);
 }
 .reset-card {
-  width: min(380px, 100%); padding: 14px 16px 16px; display: grid; gap: 8px;
+  width: min(380px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px 16px; display: grid; gap: 8px;
   background-color: var(--stone); background-image: var(--stone-tex); box-shadow: var(--frame);
 }
 .reset-card h3 { margin: 0; font-family: var(--px); font-size: 30px; font-weight: normal; color: #ff8f78; }
@@ -1297,7 +1302,7 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
 }
 body.in-editor { overflow: hidden; }
 .av-card {
-  width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto;
+  width: min(640px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
   padding: 14px 16px 16px; display: grid; gap: 10px;
   background-color: var(--stone); background-image: var(--stone-tex); box-shadow: var(--frame);
 }
@@ -1549,7 +1554,7 @@ body.in-editor { overflow: hidden; }
 }
 .vic-confetti i:nth-child(odd) { width: 5px; height: 5px; }
 .vic-card {
-  position: relative; z-index: 1; width: min(100%, 380px); max-height: 100%; overflow: auto;
+  position: relative; z-index: 1; width: min(100%, 380px); max-height: 100%; overflow: auto; overscroll-behavior: contain;
   display: grid; gap: 10px; justify-items: center; text-align: center;
   padding: 18px 16px 16px;
   background-color: var(--stone); background-image: var(--stone-tex);
@@ -1716,8 +1721,10 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   animation: ip-in 0.12s steps(3) both;
 }
 @keyframes ip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* The X sticks to the top corner, so it stays reachable while you scroll a long window. */
 .ip-close {
-  position: absolute; top: 6px; right: 6px; z-index: 1;
+  position: sticky; top: 0; float: right; z-index: 1;
+  margin: -4px -6px -28px 0; /* takes no room: the heading already leaves space for it */
   width: 28px; height: 28px; min-height: 0; padding: 0; font-size: 14px; line-height: 1;
 }
 .ip-head { display: grid; grid-template-columns: 64px 1fr; gap: 10px; align-items: center; padding-right: 26px; }
