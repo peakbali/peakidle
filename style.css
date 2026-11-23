@@ -215,37 +215,207 @@ h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: u
 .spawn-head .num { text-transform: none; letter-spacing: 0; }
 .danger-level { border-color: var(--accent); }
 
-/* Battle window */
-.battle-overlay {
-  position: fixed; inset: 0; z-index: 10;
-  background: rgba(10, 9, 8, 0.75);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
+/* ---------- Battle screen ----------
+   A fight takes over the whole screen: the monster at the top right, you at the bottom left,
+   the battle log and your actions underneath. Each danger level has its own colors. */
+body.in-battle { overflow: hidden; }
+.battle-screen {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--bg);
+  display: flex;
 }
-.battle-overlay[hidden] { display: none; }
-.battle-box {
-  width: 100%; max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+.battle-screen[hidden] { display: none; }
+.bt-wrap {
+  --sky: #2e3a2a; --ground: #1a2216; --pad: rgba(124, 194, 107, 0.28);
+  flex: 1; display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  background: linear-gradient(180deg, var(--sky) 0%, var(--ground) 62%, #141210 100%);
 }
-.battle-box h2 { margin: 2px 0 12px; }
-.fighters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 440px) { .fighters { grid-template-columns: 1fr; } }
-.fighter { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 6px; }
+.bt-tier-2 { --sky: #2b2a36; --ground: #17161d; --pad: rgba(150, 140, 200, 0.25); }
+.bt-tier-3 { --sky: #46241a; --ground: #22120d; --pad: rgba(232, 120, 58, 0.3); }
+.bt-tier-4 { --sky: #2f4258; --ground: #192331; --pad: rgba(160, 200, 240, 0.28); }
+
+.bt-top {
+  display: flex; justify-content: space-between; gap: 8px;
+  padding: 10px 16px; font-size: 13px; color: var(--muted);
+  max-width: 1000px; width: 100%; margin: 0 auto;
+}
+
+.bt-arena {
+  position: relative; flex: 1; min-height: 0;
+  max-width: 1000px; width: 100%; margin: 0 auto; padding: 0 16px;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center; gap: 8px 16px; padding-bottom: 6px;
+}
+.bt-info {
+  background: rgba(20, 18, 16, 0.82); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; display: grid; gap: 6px; max-width: 360px; width: 100%;
+}
+.bt-info.foe { justify-self: end; }
+.bt-info.you { justify-self: start; }
+.bt-hpnum { text-align: right; }
+.bt-status { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; }
+.st {
+  display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600;
+  padding: 1px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line);
+}
+.st-burn   { border-color: #e8673a; }
+.st-poison { border-color: #9a63d9; }
+.st-frozen { border-color: #8fd3ff; }
+.st-stun   { border-color: #e6d36a; }
+.st-shock  { border-color: #f0e05a; }
+.st-weaken { border-color: #b07a8f; }
+.st-heavy  { border-color: var(--bad); color: var(--bad); }
+.st-guard, .st-steady { border-color: #a39b8f; }
+
+.bt-spot { position: relative; display: grid; justify-items: center; align-self: end; }
+.bt-spot.foe { align-self: center; }
+.bt-sprite {
+  position: relative; z-index: 1; line-height: 1;
+  font-size: clamp(64px, 13vh, 130px);
+  filter: drop-shadow(0 6px 6px rgba(0, 0, 0, 0.5));
+}
+.bt-spot.foe.boss .bt-sprite { font-size: clamp(80px, 17vh, 170px); }
+.bt-spot.you .bt-sprite { font-size: clamp(56px, 11vh, 110px); }
+.bt-weapon { position: absolute; right: -0.3em; bottom: 0; font-size: 0.45em; }
+.bt-pad {
+  width: 75%; max-width: 240px; height: 26px; margin-top: -14px;
+  border-radius: 50%; background: radial-gradient(ellipse at center, var(--pad) 0%, transparent 70%);
+}
+.bt-fx { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+
+/* Sprite looks for status effects and actions */
+.bt-sprite.guarding { filter: drop-shadow(0 0 14px rgba(163, 155, 143, 0.9)); }
+.bt-sprite.is-frozen { filter: saturate(0.2) brightness(1.2) drop-shadow(0 0 12px #8fd3ff); }
+.bt-sprite.is-burn   { filter: drop-shadow(0 0 10px #e8673a); }
+.bt-sprite.is-poison { filter: drop-shadow(0 0 10px #9a63d9); }
+.bt-sprite.is-shock  { filter: drop-shadow(0 0 10px #f0e05a); }
+.bt-sprite.is-stun   { animation: bt-wobble 1.2s ease-in-out infinite; }
+.bt-sprite.hurt   { animation: bt-hurt 0.4s ease; }
+.bt-sprite.winding { animation: bt-wind 0.5s ease-in-out infinite; }
+.bt-spot.you .bt-sprite.lunge { animation: bt-lunge-you 0.35s ease; }
+.bt-spot.foe .bt-sprite.lunge { animation: bt-lunge-foe 0.35s ease; }
+.bt-sprite.fainted { opacity: 0.25; transform: translateY(12px) rotate(-8deg); transition: all 0.6s; animation: none; }
+@keyframes bt-hurt {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); filter: brightness(2) saturate(0); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes bt-wind { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08) rotate(-3deg); } }
+@keyframes bt-wobble { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+@keyframes bt-lunge-you { 50% { transform: translate(28px, -18px); } }
+@keyframes bt-lunge-foe { 50% { transform: translate(-28px, 18px); } }
+
+/* Floating numbers */
+.bt-pop {
+  position: absolute; left: 50%; top: 20%; transform: translateX(-50%);
+  font-size: 22px; font-weight: 800; white-space: nowrap; text-shadow: 0 2px 4px #000;
+  animation: bt-pop 1.1s ease-out forwards;
+}
+.pop-hit    { color: #fff; }
+.pop-crit   { color: #ffd34d; font-size: 28px; }
+.pop-heal   { color: var(--good); }
+.pop-miss   { color: var(--muted); }
+.pop-status { color: #d8b6ff; font-size: 17px; }
+.pop-burn   { color: #ff9a5c; }
+.pop-poison { color: #c58cff; }
+@keyframes bt-pop {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -48px) scale(1); }
+}
+
+/* Dodge / parry prompt */
+.bt-prompt {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(10, 9, 8, 0.35);
+}
+.bt-prompt[hidden] { display: none; }
+.bt-prompt.banner { background: transparent; pointer-events: none; }
+.bt-prompt-card {
+  width: 100%; max-width: 420px; display: grid; gap: 10px; text-align: center;
+  background: rgba(30, 27, 25, 0.95); border: 2px solid var(--line); border-radius: 14px; padding: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.bt-prompt-title { font-weight: 700; font-size: 16px; }
+.bt-prompt-state { font-size: 26px; font-weight: 800; letter-spacing: 0.04em; color: var(--muted); }
+.bt-timer { height: 10px; border-radius: 5px; background: #1a1816; overflow: hidden; border: 1px solid var(--line); }
+.bt-timer-fill { height: 100%; width: 0; background: var(--good); }
+.bt-react { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.react-btn {
+  min-height: 64px; font-size: 18px; font-weight: 700; border-width: 2px;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.react-btn kbd { font-size: 11px; opacity: 0.6; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+.bt-prompt.now .bt-prompt-card { border-color: var(--good); animation: bt-now 0.3s ease; }
+.bt-prompt.now .bt-prompt-state { color: var(--good); }
+.bt-prompt.now .react-btn:not(:disabled) { background: #3d5a35; border-color: var(--good); }
+.bt-prompt.good .bt-prompt-card { border-color: var(--good); }
+.bt-prompt.good .bt-prompt-state { color: var(--good); }
+.bt-prompt.bad .bt-prompt-card { border-color: var(--bad); }
+.bt-prompt.bad .bt-prompt-state { color: var(--bad); }
+@keyframes bt-now { 50% { transform: scale(1.04); } }
+
+/* Bottom: log and actions */
+.bt-bottom {
+  max-width: 1000px; width: 100%; margin: 0 auto; padding: 10px 16px 14px;
+  display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px;
+}
+.bt-log {
+  height: 172px; overflow-y: auto; font-size: 13px;
+  background: rgba(20, 18, 16, 0.85); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+  display: grid; align-content: start; gap: 3px;
+}
+.bt-log div:last-child { color: var(--text); font-weight: 600; }
+.bt-log div { color: var(--muted); }
+.bt-menu {
+  background: rgba(20, 18, 16, 0.85); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  display: grid; gap: 8px; align-content: start;
+}
+.bt-hint { min-height: 1.3em; }
+.actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.actions button { min-height: 44px; }
+.bt-info .tag { white-space: nowrap; }
+.actions .wide { grid-column: 1 / -1; }
+.actions .skill { font-size: 12px; color: var(--muted); border-style: dashed; }
+.actions .skill.ready { font-size: 13px; font-weight: 600; border-style: solid; border-color: currentColor; }
+.actions .skill.ready .small { font-weight: 400; }
+button.big { min-height: 52px; font-size: 16px; }
+.bt-result { display: grid; gap: 8px; }
 .hpbar { height: 12px; background: #1a1816; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
-.hpfill { height: 100%; background: var(--good); transition: width 0.25s; }
+.hpfill { height: 100%; background: var(--good); transition: width 0.35s; }
+.hpfill.mid { background: #d9b84c; }
 .hpfill.low { background: var(--bad); }
 .mana { display: flex; align-items: center; gap: 4px; }
 .pip { width: 14px; height: 14px; border-radius: 50%; border: 1px solid #5b8fd9; }
 .pip.full { background: #5b8fd9; }
-.battle-log {
-  margin: 12px 0; height: 150px; overflow-y: auto; font-size: 13px;
-  background: #1f1d1b; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
-  display: grid; align-content: start; gap: 3px;
+
+/* Phones: everything stacks, the arena gets a bit smaller, log shows the last few lines */
+@media (max-width: 700px) {
+  .bt-top { padding: 8px 12px; }
+  .bt-arena { padding: 0 12px; gap: 6px 8px; grid-template-columns: 1.15fr 1fr; }
+  .bt-info { padding: 7px 8px; gap: 3px; font-size: 13px; }
+  .bt-info .name { font-size: 13px; }
+  .bt-info .el { font-size: 11px; }
+  .bt-info .hpbar { height: 9px; }
+  .bt-info .small { font-size: 11px; }
+  .bt-status { min-height: 0; }
+  .st { font-size: 12px; padding: 0 5px; }
+  .pip { width: 11px; height: 11px; }
+  .bt-bottom { grid-template-columns: 1fr; padding: 6px 12px 10px; gap: 6px; }
+  .bt-log { height: 62px; font-size: 12px; padding: 6px 8px; }
+  .bt-menu { padding: 8px; gap: 6px; }
+  .actions { grid-template-columns: 1fr 1fr; }
+  .actions button { min-height: 42px; padding: 4px 6px; }
+  .actions .skill.ready { font-size: 12px; }
+  .bt-sprite { font-size: clamp(44px, 9vh, 90px); }
+  .bt-spot.foe.boss .bt-sprite { font-size: clamp(54px, 11vh, 110px); }
+  .bt-spot.you .bt-sprite { font-size: clamp(40px, 8vh, 80px); }
+  .bt-pad { height: 18px; margin-top: -10px; }
 }
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.actions .skill { font-size: 12px; color: var(--muted); border-style: dashed; }
-.actions .skill.ready { font-size: 13px; font-weight: 600; border-style: solid; border-color: currentColor; }
-.actions .skill.ready .small { font-weight: 400; }
 
 /* Skills panel */
 .skill-card .buttons { align-items: center; }
