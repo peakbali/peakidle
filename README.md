@@ -32,6 +32,16 @@ Your progress saves automatically in your browser.
 - **On your computer**: download the files and double-click `index.html`.
 - **Online**: turn on GitHub Pages (Settings → Pages → Branch: `main`, folder `/ (root)` → Save). After a minute the game is live at `https://peakbali.github.io/peakidle/`.
 
+## Install it as an app
+
+Peak Idle can sit on your home screen like a normal app. It opens full screen and works without internet. Your progress is the same one you have in the browser on that phone.
+
+- **Android (Chrome)**: open `https://peakbali.github.io/peakidle/`, tap the **⋮** menu at the top right, then **Install app** (or **Add to Home screen**). Or open the game's settings gear and tap **Install app**.
+- **iPhone / iPad (Safari)**: open the game, tap the **Share** button (square with an arrow), scroll down and tap **Add to Home Screen**, then **Add**.
+- **Computer (Chrome or Edge)**: click the little install icon at the right end of the address bar.
+
+Updates arrive by themselves: whenever the game is opened with internet it loads the newest files. Without internet it uses the copy saved the last time.
+
 ## Files
 
 - `index.html`: the page layout
@@ -46,6 +56,10 @@ Your progress saves automatically in your browser.
 - `monster-art.js`: the pixel-art monsters (colored by their element) and the 10 bosses, with each boss's title, description and backstory. Also picks each monster's idle animation.
 - `zone-art.js`: the faint pixel landscape behind the danger level in the Adventure panel, one scene per zone (cave, mine, lava, mountains, crystals, ruins, tundra, desert, abyss, starry crown).
 - `icons.js`: the pixel-art icons for the menu, tab bar, panel titles and top bar (pickaxe, anvil, shield, swords, scroll, arrow, ghost, coin, gear, house), drawn in code from little text maps.
+- `manifest.webmanifest`: the app's name, icons and colors for the home screen.
+- `sw.js`: the offline helper (service worker). It always asks for the newest files first and only uses its saved copies when there is no internet.
+- `pwa.js`: turns on the offline helper and fills the "Play as an app" box in the settings menu.
+- `icons/`: the app icons (gold ore and pickaxe). `icon.svg` is the drawing they were made from.
 - `fonts/`: the Jersey 15 pixel font used for titles and numbers (free, SIL Open Font License in `fonts/OFL.txt`).
 
 When you change `style.css`, `game.js`, `menu.js` or `icons.js`, raise the `?v=` number after their names in `index.html` (for example `?v=10` to `?v=11`). That makes phones and browsers load the new files instead of an old saved copy.
