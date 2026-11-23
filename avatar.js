@@ -11,6 +11,7 @@ const AVATAR_NAME_MAX = 16;
 
 // Every choice in the editor. "colors" lists are swatches, the others are named styles.
 const AVATAR_OPTIONS = {
+  body: { label: "Body", styles: [{ id: "man", name: "Man" }, { id: "woman", name: "Woman" }] },
   skin: { label: "Skin", colors: [
     { id: "porcelain", c: "#ffe0c4" }, { id: "peach", c: "#f1c194" }, { id: "tan", c: "#d9a06b" },
     { id: "bronze", c: "#b47a4c" }, { id: "brown", c: "#8a5734" }, { id: "deep", c: "#5e3a23" },
@@ -52,11 +53,11 @@ const AVATAR_OPTIONS = {
     { id: "crown", name: "Crown" },
   ] },
 };
-const AVATAR_ORDER = ["skin", "hair", "hairColor", "eyes", "eyeColor", "beard", "outfit", "headgear"];
+const AVATAR_ORDER = ["body", "skin", "hair", "hairColor", "eyes", "eyeColor", "beard", "outfit", "headgear"];
 
 // The look every player starts with (also used for older saves).
 const AVATAR_DEFAULT = {
-  name: "Hero", skin: "peach", hair: "short", hairColor: "brown", eyes: "round",
+  name: "Hero", body: "man", skin: "peach", hair: "short", hairColor: "brown", eyes: "round",
   eyeColor: "brown", beard: "none", outfit: "blue", headgear: "none",
 };
 
@@ -114,26 +115,49 @@ function avatarGrid(p) {
   if (p.hair === "long") { mirror(6, 9, 2, 10, hair); mirror(6, 17, 1, 2, hairD); }
   if (p.hair === "curly") { mirror(5, 8, 3, 8, hair); mirror(5, 10, 1, 1, hairD); mirror(6, 13, 1, 1, hairD); }
 
-  // Legs and boots
-  rect(8, 25, 3, 4, pants); rect(13, 25, 3, 4, pants); rect(10, 25, 1, 4, pantsD); rect(15, 25, 1, 4, pantsD);
-  rect(7, 29, 4, 2, boot); rect(13, 29, 4, 2, boot); rect(7, 30, 4, 1, bootD); rect(13, 30, 4, 1, bootD);
-  // Body: a tunic with a belt
-  rect(7, 17, 10, 8, cloth);
-  rect(15, 17, 2, 8, clothD); rect(7, 17, 1, 8, clothL);
-  rect(10, 17, 4, 1, skinD); px(11, 18, skinD); px(12, 18, skinD); // neckline
-  rect(7, 22, 10, 1, leather); rect(11, 22, 2, 1, buckle);
-  rect(8, 23, 8, 2, cloth); rect(14, 23, 2, 2, clothD); // tunic skirt over the legs
-  // Arms (sleeves) and hands
-  rect(5, 17, 2, 6, cloth); rect(17, 17, 2, 6, clothD); px(5, 17, clothL);
-  rect(5, 23, 2, 2, skin); rect(17, 23, 2, 2, skinD);
+  const woman = p.body === "woman";
+  if (woman) {
+    // Woman: narrower shoulders, a belted dress that flares out, slimmer legs
+    rect(9, 27, 2, 2, pants); rect(13, 27, 2, 2, pants); px(10, 27, pantsD); px(14, 27, pantsD);
+    rect(8, 29, 3, 2, boot); rect(13, 29, 3, 2, boot); rect(8, 30, 3, 1, bootD); rect(13, 30, 3, 1, bootD);
+    rect(8, 17, 8, 4, cloth); rect(14, 17, 2, 4, clothD); rect(8, 17, 1, 4, clothL);
+    rect(10, 17, 4, 1, skinD); px(11, 18, skinD); px(12, 18, skinD); // neckline
+    rect(9, 21, 6, 1, leather); px(8, 21, cloth); px(15, 21, clothD); rect(11, 21, 2, 1, buckle);
+    rect(8, 22, 8, 1, cloth); rect(7, 23, 10, 2, cloth); rect(6, 25, 12, 2, cloth);   // skirt
+    rect(14, 22, 2, 1, clothD); rect(15, 23, 2, 2, clothD); rect(15, 25, 3, 2, clothD);
+    px(8, 23, clothL); px(7, 25, clothL);
+    rect(6, 26, 12, 1, clothD); rect(10, 23, 1, 3, clothD);                           // hem and a fold
+    rect(6, 17, 2, 5, cloth); rect(16, 17, 2, 5, clothD); px(6, 17, clothL);
+    rect(6, 22, 2, 2, skin); rect(16, 22, 2, 2, skinD);
+  } else {
+    // Man: broad shoulders and a tunic with a belt
+    rect(8, 25, 3, 4, pants); rect(13, 25, 3, 4, pants); rect(10, 25, 1, 4, pantsD); rect(15, 25, 1, 4, pantsD);
+    rect(7, 29, 4, 2, boot); rect(13, 29, 4, 2, boot); rect(7, 30, 4, 1, bootD); rect(13, 30, 4, 1, bootD);
+    rect(7, 17, 10, 8, cloth);
+    rect(15, 17, 2, 8, clothD); rect(7, 17, 1, 8, clothL);
+    rect(10, 17, 4, 1, skinD); px(11, 18, skinD); px(12, 18, skinD); // neckline
+    rect(7, 22, 10, 1, leather); rect(11, 22, 2, 1, buckle);
+    rect(8, 23, 8, 2, cloth); rect(14, 23, 2, 2, clothD); // tunic skirt over the legs
+    rect(5, 17, 2, 6, cloth); rect(17, 17, 2, 6, clothD); px(5, 17, clothL);
+    rect(5, 23, 2, 2, skin); rect(17, 23, 2, 2, skinD);
+  }
   // Neck and head
   rect(10, 15, 4, 2, skinD);
   rect(7, 6, 10, 10, skin);
   rect(15, 7, 2, 9, skinD); rect(8, 15, 8, 1, skinD);   // shade on the right and under the chin
   rect(8, 7, 2, 1, skinL);
   mirror(6, 10, 1, 2, skin); px(17, 11, skinD);           // ears
+  if (woman) {
+    // Softer, rounder jaw
+    for (const [x, y] of [[7, 14], [7, 15], [16, 14], [16, 15], [8, 15], [15, 15]]) g[y][x] = null;
+    rect(9, 15, 6, 1, skinD); px(8, 14, skinD); px(15, 14, skinD);
+    // Long or curly hair shows again in the gaps beside the chin
+    if (p.hair === "long") for (const [x, y] of [[7, 14], [7, 15], [16, 14], [16, 15]]) px(x, y, hair);
+    if (p.hair === "curly") for (const [x, y] of [[7, 14], [7, 15], [16, 14], [16, 15]]) if (y < 16) px(x, y, hair);
+  }
   // Mouth and nose
-  rect(11, 13, 2, 1, avatarShade(skin, 0.6));
+  const mouth = woman ? "#c25a5a" : avatarShade(skin, 0.6);
+  rect(11, 13, 2, 1, mouth);
   px(12, 11, skinD);
 
   // Eyes (row 10-11), left eye at x 9, right eye at x 14
@@ -149,6 +173,8 @@ function avatarGrid(p) {
       break;
     default: eyesAt((x) => { px(x, 10, eye); px(x, 11, eye); px(x, 10, avatarShade(eye, 1.5)); }); px(9, 11, eye); px(14, 11, eye);
   }
+  // Eyelashes at the outer corners
+  if (woman && p.eyes !== "narrow" && p.eyes !== "happy") { px(8, 9, dark); if (p.eyes !== "patch") px(15, 9, dark); }
   // Rosy cheeks for the happy face
   if (p.eyes === "happy") { px(8, 12, avatarShade(skin, 0.9)); px(15, 12, avatarShade(skin, 0.75)); }
 
@@ -161,7 +187,7 @@ function avatarGrid(p) {
       const st = mix(skin, hair), stD = mix(skinD, hair);
       rect(7, 13, 10, 3, st); rect(15, 13, 2, 3, stD); rect(8, 15, 8, 1, stD); rect(7, 12, 1, 1, st); px(16, 12, stD);
       rect(10, 12, 4, 1, st);
-      rect(11, 13, 2, 1, avatarShade(skin, 0.6));
+      rect(11, 13, 2, 1, mouth);
     }
       break;
     case "mustache":
@@ -169,16 +195,16 @@ function avatarGrid(p) {
       break;
     case "short":
       rect(7, 12, 10, 4, hair); rect(8, 16, 8, 1, hair); rect(15, 12, 2, 5, hairD);
-      rect(11, 13, 2, 1, avatarShade(skin, 0.6)); rect(9, 12, 6, 1, hairD); px(10, 14, hairL);
+      rect(11, 13, 2, 1, mouth); rect(9, 12, 6, 1, hairD); px(10, 14, hairL);
       break;
     case "long":
       rect(7, 12, 10, 4, hair); rect(8, 16, 8, 3, hair); rect(9, 19, 6, 2, hair); rect(10, 21, 4, 1, hair);
-      rect(14, 14, 2, 6, hairD); rect(11, 13, 2, 1, avatarShade(skin, 0.6)); rect(9, 12, 6, 1, hairD);
+      rect(14, 14, 2, 6, hairD); rect(11, 13, 2, 1, mouth); rect(9, 12, 6, 1, hairD);
       px(10, 15, hairL); px(11, 18, hairL);
       break;
     case "braided":
       rect(7, 12, 10, 4, hair); rect(8, 16, 8, 1, hair); rect(15, 12, 2, 5, hairD);
-      rect(11, 13, 2, 1, avatarShade(skin, 0.6)); rect(9, 12, 6, 1, hairD);
+      rect(11, 13, 2, 1, mouth); rect(9, 12, 6, 1, hairD);
       rect(11, 17, 2, 6, hair); rect(11, 19, 2, 1, gold); rect(11, 22, 2, 1, gold); px(12, 17, hairD); px(12, 20, hairD);
       break;
   }
@@ -311,6 +337,12 @@ function openAvatarEditor() {
         <div class="av-swatches" role="radiogroup" aria-label="${o.label}">${o.colors.map(c =>
           `<button type="button" class="av-swatch" role="radio" data-key="${key}" data-val="${c.id}" style="--sw:${c.c}" aria-label="${o.label}: ${c.id}" title="${c.id}"></button>`).join("")}</div></div>`;
     }
+    if (o.styles.length === 2) {
+      // Just two choices (Man / Woman): two buttons side by side
+      return `<div class="av-row"><div class="av-label">${o.label}</div>
+        <div class="av-seg" role="radiogroup" aria-label="${o.label}">${o.styles.map(c =>
+          `<button type="button" class="av-pick" role="radio" data-key="${key}" data-val="${c.id}">${c.name}</button>`).join("")}</div></div>`;
+    }
     return `<div class="av-row"><div class="av-label">${o.label}</div>
       <div class="av-stepper">
         <button type="button" class="av-step" data-key="${key}" data-step="-1" aria-label="Previous ${o.label.toLowerCase()}">◀</button>
@@ -342,7 +374,7 @@ function openAvatarEditor() {
   nameInput.value = avatarDraft.name;
   nameInput.addEventListener("input", () => { avatarDraft.name = nameInput.value; renderAvatarEditor(); });
   nameInput.addEventListener("keydown", e => { if (e.key === "Enter") saveAvatarEditor(); });
-  box.querySelectorAll(".av-swatch").forEach(b => b.onclick = () => {
+  box.querySelectorAll(".av-swatch, .av-pick").forEach(b => b.onclick = () => {
     avatarDraft[b.dataset.key] = b.dataset.val; renderAvatarEditor();
   });
   box.querySelectorAll(".av-step").forEach(b => b.onclick = () => {
@@ -372,7 +404,7 @@ function renderAvatarEditor() {
   const shown = normalizeProfile(avatarDraft);
   box.querySelector('[data-k="full"]').innerHTML = avatarSVG(shown, "full");
   box.querySelector('[data-k="previewName"]').textContent = shown.name;
-  box.querySelectorAll(".av-swatch").forEach(b => {
+  box.querySelectorAll(".av-swatch, .av-pick").forEach(b => {
     const on = avatarDraft[b.dataset.key] === b.dataset.val;
     b.classList.toggle("on", on);
     b.setAttribute("aria-checked", String(on));
