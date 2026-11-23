@@ -207,3 +207,13 @@ h3 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); text-transform: u
 .result.win { color: var(--good); }
 .result.lose { color: var(--bad); }
 button.primary .el { color: #1d1b19; background: rgba(0, 0, 0, 0.12); border-color: rgba(0, 0, 0, 0.3); }
+
+/* Souls and reincarnation */
+.header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.souls-bar { font-size: 15px; font-weight: 600; color: #c9b6ff; font-variant-numeric: tabular-nums; }
+.attr .stats-line { margin: 0; font-weight: 600; }
+.rebirth { border-color: #7a6aa8; }
+.souls-preview { display: grid; gap: 2px; margin: 8px 0; font-size: 13px; }
+.souls-preview .total { border-top: 1px solid var(--line); padding-top: 4px; font-weight: 700; color: #c9b6ff; }
+.confirm { margin-top: 10px; padding: 10px; border: 1px solid var(--bad); border-radius: 8px; display: grid; gap: 6px; background: rgba(217, 96, 76, 0.08); }
+.confirm .small b { color: var(--text); }
