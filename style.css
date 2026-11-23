@@ -608,3 +608,8 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
   .dwarf-box { gap: 6px; }
   .dwarf { width: 72px; height: 57px; }
 }
+
+/* Pixel-art ore pictures (drawn in ores-art.js). Sized to the text around them. */
+.ore-art { width: 1.25em; height: 1.25em; vertical-align: -0.28em; image-rendering: pixelated; flex: none; }
+.ore-btn .ore-art { width: 40px; height: 40px; vertical-align: middle; display: block; margin: auto; }
+.ore-btn:hover:not(:disabled) .ore-art { filter: brightness(1.12); }

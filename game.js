@@ -28,8 +28,14 @@ const ORES = [
   { id: "voidsteel",  name: "Voidsteel",  icon: "🌌", perSecPerMiner: 0.01,  minerCost: 900e6,     unlockCost: 100e9,  statMult: 1900, costMult: 5.5, gearValue: 33e6,  infuseCost: 11000 },
 ];
 
+// The pixel-art picture for an ore (drawn in ores-art.js), or its emoji if that file is missing.
+function oreIcon(o) {
+  return typeof oreArtSVG === "function" ? oreArtSVG(o.id) || o.icon : o.icon;
+}
+
 // The hero's stats. "power" (skill power) makes your skills hit harder.
 // Luck is your critical hit chance in % (a crit does double damage). It comes from Soul attributes.
+
 const STATS = [
   { id: "hp",      name: "HP",          icon: "❤️" },
   { id: "attack",  name: "Attack",      icon: "⚔️" },
@@ -1404,7 +1410,7 @@ function buildForge() {
   tabs.innerHTML = "";
   for (const o of ORES) {
     if (!state.unlocked[o.id]) continue;
-    const b = el(`<button class="tab${o.id === forgeOre ? " active" : ""}">${o.icon} ${o.name}</button>`);
+    const b = el(`<button class="tab${o.id === forgeOre ? " active" : ""}">${oreIcon(o)} ${o.name}</button>`);
     b.onclick = () => { forgeOre = o.id; buildForge(); render(); };
     tabs.appendChild(b);
   }
@@ -2176,7 +2182,7 @@ function buildUI() {
       const card = el(`
         <div class="card">
           <div class="row ore-top">
-            <button class="ore-btn" title="Mine ${o.name}">${o.icon}</button>
+            <button class="ore-btn" title="Mine ${o.name}">${oreIcon(o)}</button>
             ${typeof dwarfHTML === "function" ? dwarfHTML(o.id, o.name) : ""}
           </div>
           <div class="row">
@@ -2197,7 +2203,7 @@ function buildUI() {
       const card = el(`
         <div class="card locked">
           <div class="row">
-            <span class="name">${o.icon} ${o.name} mine (locked)</span>
+            <span class="name">${oreIcon(o)} ${o.name} mine (locked)</span>
             <button data-k="unlock" class="primary">Open for <span data-k="unlockCost"></span> 🪙</button>
           </div>
         </div>`);
@@ -2249,7 +2255,7 @@ function set(root, key, text) {
 function renderOreBar() {
   const bar = document.getElementById("ore-bar");
   if (!bar.children.length) {
-    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${o.icon} <span class="num" data-k="n">0</span></span>`));
+    for (const o of ORES) bar.appendChild(el(`<span class="ore-chip" data-ore="${o.id}" title="${o.name} ore" hidden>${oreIcon(o)} <span class="num" data-k="n">0</span></span>`));
   }
   for (const o of ORES) {
     const chip = bar.querySelector(`[data-ore="${o.id}"]`);
