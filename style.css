@@ -53,13 +53,54 @@ h2 { margin: 0 0 4px; font-size: 18px; color: var(--accent); }
 
 .coins { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* Layout: all 7 panels side by side in ONE row.
+   Each panel scrolls up and down on its own, so the page itself never
+   needs a long scroll. Wide screens: 7 equal columns.
+   Medium screens: the row slides sideways (swipe or shift + mouse wheel).
+   Phones: panels stack on top of each other like before. */
 main {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 16px;
-  max-width: 1200px;
-  margin: 0 auto;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+@media (min-width: 701px) {
+  body {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header { flex: none; }
+  main {
+    flex: 1;
+    min-height: 0;
+  }
+  .panel {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #5a534b transparent;
+  }
+  footer { flex: none; padding: 6px 16px 10px; max-width: none; }
+}
+
+/* Not wide enough for 7 readable columns: keep one row, slide sideways. */
+@media (min-width: 701px) and (max-width: 1599px) {
+  main {
+    grid-template-columns: repeat(7, 290px);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 10px;
+  }
+  .panel { scroll-snap-align: start; }
+}
+
+/* Phones: one column, scroll the page as before. */
+@media (max-width: 700px) {
+  main { grid-template-columns: 1fr; }
 }
 
 .panel {
