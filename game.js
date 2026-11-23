@@ -334,6 +334,17 @@ const MONSTER_SCALING = {
 };
 const BOSS_MULT = { hp: 1.6, attack: 1.15, defense: 1.15, agility: 1.1, coins: 3, drops: 3 };
 
+// From danger level 5 on, monster HP, attack and defense grow at the same speed as the gear of the
+// matching ore (danger level N goes with ore N), so a hero in that ore's gear always has a fair fight.
+// Before this, monster HP grew faster than gear: the level 5 boss had ~7,900 HP and a boss fight took
+// 30-45 turns. The numbers below scale each stat on top of that. Coins, drops and agility don't change.
+const LATE_TIERS = {
+  fromTier: 5,
+  hp: 0.6,       // 60% of what the level 4 numbers grown by gear would give: level 5 boss ~4,100 HP
+  attack: 1.0,
+  defense: 1.0,
+};
+
 // Battle rules
 const BATTLE = {
   startMana: 3,
@@ -370,10 +381,17 @@ const MONSTER_MOVES = {
   lightning: { name: "Static Claw",  power: 1.1,  status: "shock",  chance: 0.5 },
 };
 
-// Stats and rewards for a monster of this tier (1-4).
+// Stats and rewards for a monster of this tier (1-10).
 function monsterStats(tier, boss) {
   const step = boss ? tier * 5 - 1 : (tier - 1) * 5 + 2;
-  const stat = key => MONSTER_SCALING[key].start * Math.pow(MONSTER_SCALING[key].growth, step) * (boss ? BOSS_MULT[key] : 1);
+  const grow = (key, st) => MONSTER_SCALING[key].start * Math.pow(MONSTER_SCALING[key].growth, st) * (boss ? BOSS_MULT[key] : 1);
+  const stat = key => {
+    if (tier < LATE_TIERS.fromTier || !LATE_TIERS[key]) return grow(key, step);
+    // Late tiers: start from the last early tier and grow with the matching ore's gear.
+    const base = LATE_TIERS.fromTier - 1;
+    const gear = ORES[tier - 1].statMult / ORES[base - 1].statMult;
+    return grow(key, step - 5 * (tier - base)) * gear * LATE_TIERS[key];
+  };
   return {
     stats: {
       hp: Math.round(stat("hp")),
