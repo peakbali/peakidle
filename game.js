@@ -2791,18 +2791,12 @@ function buildUI() {
   for (const o of ORES) {
     if (state.unlocked[o.id]) {
       const card = el(`
-        <div class="card">
-          <div class="row ore-top">
-            <button class="ore-btn" title="Mine ${o.name}">${oreIcon(o)}</button>
-            ${typeof dwarfHTML === "function" ? dwarfHTML(o.id, o.name) : ""}
-          </div>
-          <div class="row">
-            <div style="flex:1">
-              <div class="name">${o.name} ore: <span class="num" data-k="amount"></span></div>
-              <div class="small">Miners: <span data-k="miners"></span> · <span data-k="rate"></span>/sec · +<span data-k="click"></span> per click</div>
-            </div>
-          </div>
-          <div class="buttons">
+        <div class="card ore-card">
+          <div class="ore-dwarf">${typeof dwarfHTML === "function" ? dwarfHTML(o.id, o.name) : ""}</div>
+          <button class="ore-btn" title="Mine ${o.name}">${oreIcon(o)}</button>
+          <div class="name ore-title">${o.name} ore: <span class="num" data-k="amount"></span></div>
+          <div class="small ore-stats">Miners: <span data-k="miners"></span> · <span data-k="rate"></span>/sec · +<span data-k="click"></span> per click</div>
+          <div class="buttons ore-hire">
             <button data-k="hire">Hire miner (<span data-k="hireCost"></span> 🪙)</button>
           </div>
         </div>`);
