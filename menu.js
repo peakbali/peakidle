@@ -52,7 +52,6 @@ const settingsPop = document.getElementById("settings-pop");
 function setSettingsOpen(open) {
   settingsPop.hidden = !open;
   settingsBtn.setAttribute("aria-expanded", String(open));
-  if (!open) document.getElementById("reset-confirm").hidden = true;
 }
 settingsBtn.addEventListener("click", () => setSettingsOpen(settingsPop.hidden));
 document.addEventListener("click", e => {
