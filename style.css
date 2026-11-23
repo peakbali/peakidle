@@ -231,6 +231,12 @@ body.in-battle { overflow: hidden; }
 .bt-tier-2 { --sky: #2b2a36; --ground: #17161d; --pad: rgba(150, 140, 200, 0.25); }
 .bt-tier-3 { --sky: #46241a; --ground: #22120d; --pad: rgba(232, 120, 58, 0.3); }
 .bt-tier-4 { --sky: #2f4258; --ground: #192331; --pad: rgba(160, 200, 240, 0.28); }
+.bt-tier-5 { --sky: #2a3f4a; --ground: #142128; --pad: rgba(120, 230, 230, 0.28); }
+.bt-tier-6 { --sky: #1d3a3c; --ground: #0f1f20; --pad: rgba(90, 190, 170, 0.28); }
+.bt-tier-7 { --sky: #4a5866; --ground: #262d35; --pad: rgba(220, 235, 250, 0.3); }
+.bt-tier-8 { --sky: #5a3a1c; --ground: #2c1b0c; --pad: rgba(240, 170, 80, 0.3); }
+.bt-tier-9 { --sky: #231a33; --ground: #100c18; --pad: rgba(170, 120, 230, 0.28); }
+.bt-tier-10 { --sky: #1a1f45; --ground: #0c0e22; --pad: rgba(255, 220, 120, 0.3); }
 
 .bt-top {
   display: flex; justify-content: space-between; gap: 8px;
@@ -374,7 +380,11 @@ body.in-battle { overflow: hidden; }
   display: grid; gap: 8px; align-content: start;
 }
 .bt-hint { min-height: 1.3em; }
-.actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; }
+.actions .skill.ready.wskill { color: #e6d3b3; }
+.st-focus { border-color: #ffd76a; }
+.wskill-line { color: #cdb894; }
+.wskill-row { margin-top: 6px; }
 .actions button { min-height: 44px; }
 .bt-info .tag { white-space: nowrap; }
 .actions .wide { grid-column: 1 / -1; }
