@@ -1106,3 +1106,6 @@ body.in-editor { overflow: hidden; }
   .av-actions { position: sticky; bottom: -12px; margin: 0 -12px -12px; padding: 10px 12px; background: var(--stone); box-shadow: 0 -3px 0 var(--outline); }
   .av-actions button { flex: 1; }
 }
+.av-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.av-pick { font-family: var(--px); font-size: 22px; line-height: 1; padding: 6px; }
+.av-pick.on { --btn-bg: var(--accent); color: #241406; }
