@@ -189,6 +189,12 @@ function infoPopEl() {
     infoPop.el.hidden = true;
     infoPop.el.addEventListener("pointerenter", () => clearTimeout(infoPop.leaveTimer));
     infoPop.el.addEventListener("pointerleave", ev => { if (ev.pointerType === "mouse" && !infoPop.pinned) scheduleInfoClose(); });
+    // Remember when a finger is on the window and when it last scrolled (see refreshInfoPop).
+    infoPop.el.addEventListener("touchstart", () => { infoPop.touching = true; }, { passive: true });
+    const lift = () => { infoPop.touching = false; infoPop.scrolledAt = performance.now(); };
+    infoPop.el.addEventListener("touchend", lift, { passive: true });
+    infoPop.el.addEventListener("touchcancel", lift, { passive: true });
+    infoPop.el.addEventListener("scroll", () => { infoPop.scrolledAt = performance.now(); }, { passive: true });
     document.body.appendChild(infoPop.el);
   }
   return infoPop.el;
@@ -207,6 +213,8 @@ function openInfoPop(anchor, pinned) {
   pop.innerHTML = emo(`<button class="ip-close" type="button" aria-label="Close">✕</button><div class="ip-body">${html}</div>`);
   pop.querySelector(".ip-close").onclick = closeInfoPop;
   pop.hidden = false;
+  pop.scrollTop = 0;
+  infoPop.touching = false;
   placeInfoPop();
 }
 
@@ -225,39 +233,41 @@ function scheduleInfoClose() {
 }
 
 // Next to the picture: below it if there's room, otherwise above, always inside the screen.
+// The game redraws about 10 times a second and calls this each time, so it must not
+// disturb the window: it measures without changing anything, and only writes a size or
+// position when it really changed (rewriting them used to snap a scrolled window back to the top).
 function placeInfoPop() {
   const pop = infoPop.el;
   const a = infoPop.anchor;
   if (!pop || pop.hidden || !a) return;
   const vw = document.documentElement.clientWidth, vh = window.innerHeight;
   const r = a.getBoundingClientRect();
-  pop.style.left = "0px";
-  pop.style.top = "0px";
-  pop.style.maxHeight = "";
   const w = pop.offsetWidth;
   const gap = 8, edge = 8;
   const below = vh - r.bottom - gap - edge, above = r.top - gap - edge;
-  let h = pop.offsetHeight;
-  let top;
+  const full = pop.scrollHeight + (pop.offsetHeight - pop.clientHeight); // height with nothing cut off
+  let h = full, top, maxH = "";
   if (h <= below) top = r.bottom + gap;
   else if (h <= above) top = r.top - gap - h;
   else {
     // Not enough room either side: use the bigger side, or the whole screen height.
     const room = Math.max(below, above);
     if (room >= 220) {
-      pop.style.maxHeight = `${room}px`;
-      h = pop.offsetHeight;
+      h = Math.min(full, room);
+      maxH = `${Math.floor(room)}px`;
       top = below >= above ? r.bottom + gap : r.top - gap - h;
     } else {
-      pop.style.maxHeight = `${vh - 2 * edge}px`;
-      h = pop.offsetHeight;
+      h = Math.min(full, vh - 2 * edge);
+      maxH = `${Math.floor(vh - 2 * edge)}px`;
       top = Math.max(edge, (vh - h) / 2);
     }
   }
   let left = r.left + r.width / 2 - w / 2;
   left = Math.max(edge, Math.min(vw - w - edge, left));
-  pop.style.left = `${Math.round(left)}px`;
-  pop.style.top = `${Math.round(top)}px`;
+  const L = `${Math.round(left)}px`, T = `${Math.round(top)}px`;
+  if (pop.style.maxHeight !== maxH) pop.style.maxHeight = maxH;
+  if (pop.style.left !== L) pop.style.left = L;
+  if (pop.style.top !== T) pop.style.top = T;
 }
 
 // The game redraws parts of the screen often. Keep the window's numbers fresh and
@@ -272,12 +282,14 @@ function refreshInfoPop() {
   }
   const html = infoHTML(infoPop.key, infoPop.level);
   if (!html) { closeInfoPop(); return; }
-  if (html !== infoPop.html) {
+  // New numbers wait while a finger is on the window or it is still gliding, so scrolling stays smooth.
+  const busy = infoPop.touching || performance.now() - (infoPop.scrolledAt || 0) < 400;
+  if (html !== infoPop.html && !busy) {
     infoPop.html = html;
     const body = infoPop.el.querySelector(".ip-body");
     const scroll = infoPop.el.scrollTop;
     body.innerHTML = emo(html);
-    infoPop.el.scrollTop = scroll;
+    if (infoPop.el.scrollTop !== scroll) infoPop.el.scrollTop = scroll;
   }
   placeInfoPop();
 }
