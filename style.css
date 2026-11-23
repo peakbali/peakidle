@@ -157,6 +157,9 @@ button.danger { background: transparent; border-color: var(--bad); color: var(--
   transition: transform 0.05s;
 }
 .ore-btn:active:not(:disabled) { transform: scale(0.92); }
+/* Ores with a picture instead of an emoji: shown as a round icon */
+.ore-img { width: 1.2em; height: 1.2em; border-radius: 50%; object-fit: cover; vertical-align: -0.25em; }
+.ore-img.big { width: 52px; height: 52px; vertical-align: middle; display: block; margin: auto; }
 
 .buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 
