@@ -188,16 +188,15 @@ function dwarfCaption(miners) {
 }
 
 // Called from render(): only touches the page when the speed step changes.
+// The speed is not shown as text any more; it lives in the dwarf's tooltip.
 function updateDwarf(box, oreId, miners) {
   if (!box) return;
   const sp = dwarfSpeed(miners);
-  const [main, next] = dwarfCaption(miners);
-  const a = box.querySelector(".dw-speed"), b = box.querySelector(".dw-next");
-  setIconText(a, main);
-  setIconText(b, next);
   if (box.dataset.speed === String(sp)) return;
   box.dataset.speed = String(sp);
   const fig = box.querySelector(".dwarf");
+  const [main, next] = dwarfCaption(miners);
+  fig.title = `${main.replace(/^\S+\s/, "")}. ${next}. Every ${DWARF_SPEED_STEP} miners make the dwarf dig faster.`;
   fig.classList.toggle("sleep", sp === 0);
   const look = DWARF_LOOKS[oreId] || DWARF_LOOKS.copper;
   const base = DWARF_ANIMS[look.anim].base;
@@ -209,8 +208,7 @@ function dwarfHTML(oreId, oreName) {
   const look = DWARF_LOOKS[oreId] || DWARF_LOOKS.copper;
   return `
     <div class="dwarf-box">
-      <div class="dwarf dw-${look.anim}" title="Your ${oreName} dwarf. Every 10 miners make the dwarf dig faster (top speed 10 at 90 miners).">${dwarfSVG(oreId)}</div>
-      <div class="dw-caption small"><div class="dw-speed"></div><div class="dw-next"></div></div>
+      <div class="dwarf dw-${look.anim}" title="Your ${oreName} dwarf">${dwarfSVG(oreId)}</div>
     </div>`;
 }
 
