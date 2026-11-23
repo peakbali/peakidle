@@ -493,11 +493,11 @@ footer {
 /* Equipment: framed squares around the body, like a paper doll.
           [ helmet ]
    [sword][ chest  ][shield]
-   [gloves][ boots ]          */
+   [gloves][ boots ][ ring ]  */
 .eq-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 76px));
-  grid-template-areas: ". helmet ." "weapon chestplate shield" "gloves boots .";
+  grid-template-areas: ". helmet ." "weapon chestplate shield" "gloves boots ring";
   justify-content: center;
   gap: 8px 10px;
   padding: 12px 4px 6px;
@@ -509,6 +509,7 @@ footer {
 .eq-shield { grid-area: shield; }
 .eq-gloves { grid-area: gloves; }
 .eq-boots { grid-area: boots; }
+.eq-ring { grid-area: ring; }
 .eq-slot {
   display: grid; justify-items: center; gap: 3px;
   padding: 0; background: none; border: 0; box-shadow: none; min-width: 0;
