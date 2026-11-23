@@ -1494,16 +1494,17 @@ function fmtRate(n) { return n < 10 ? n.toFixed(2).replace(/\.?0+$/, "") : fmt(n
 
 function el(html) {
   const t = document.createElement("template");
-  t.innerHTML = html.trim();
+  t.innerHTML = emo(html.trim());
   return t.content.firstChild;
 }
 
 let logTimer;
 function log(msg) {
   const box = document.getElementById("log");
-  box.textContent = msg;
+  box.innerHTML = emo(escapeHtml(msg));
+  box.dataset.msg = msg;
   clearTimeout(logTimer);
-  logTimer = setTimeout(() => { box.textContent = ""; }, 6000);
+  logTimer = setTimeout(() => { box.textContent = ""; box.dataset.msg = ""; }, 6000);
 }
 
 // Elements we update every frame, so we don't rebuild buttons while you're clicking.
@@ -1671,7 +1672,7 @@ function renderGearPicker() {
       </span>
       ${worn ? `<button type="button" data-unequip>Unequip</button>` : `<button type="button" class="primary" data-equip="${r.id}">Equip</button>`}
     </div>`;
-  box.innerHTML = `
+  box.innerHTML = emo(`
     <div class="av-card gp-card" role="dialog" aria-modal="true" aria-label="Choose ${type.name.toLowerCase()}">
       <div class="gp-head">
         <h3>${type.name}</h3>
@@ -1684,7 +1685,7 @@ function renderGearPicker() {
           `<div class="gp-none">You have no ${plural} in your bag.<br>Smith one in the Forge first.
             <div class="buttons"><button type="button" data-go="forge" data-close>Go to the Forge</button></div></div>`}
       </div>
-    </div>`;
+    </div>`);
   box.querySelectorAll("[data-equip]").forEach(b => { b.onclick = () => { equip(b.dataset.equip); closeGearPicker(); }; });
   const un = box.querySelector("[data-unequip]");
   if (un) un.onclick = () => { unequip(slotId); closeGearPicker(); };
@@ -1881,7 +1882,7 @@ function renderAdventure() {
   for (const card of refs.monsters) {
     const btn = card.querySelector('[data-k="fight"]');
     const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
-    if (btn.textContent !== label) btn.textContent = label;
+    setIconText(btn, label);
     btn.disabled = !canFight();
   }
 }
@@ -1940,7 +1941,7 @@ function buildBattleScreen() {
   const tier = TIERS[m.tier - 1];
   const weapon = b.hero.weapon && recipeById[b.hero.weapon];
   battleUi.built = b;
-  battleScreen().innerHTML = `
+  battleScreen().innerHTML = emo(`
     <div class="bt-wrap bt-tier-${m.tier}">
       <div class="bt-top">
         <span>${tier.icon} ${tier.name} · Danger level ${m.tier}</span>
@@ -1966,7 +1967,7 @@ function buildBattleScreen() {
         <div class="bt-log" data-k="log" aria-live="polite"></div>
         <div class="bt-menu" data-k="menu"></div>
       </div>
-    </div>`;
+    </div>`);
 }
 
 // Small icons for status effects, with turns left (and stacks for poison).
@@ -1989,18 +1990,18 @@ function renderBattle() {
 
   battlePart("turn").textContent = b.result ? "" : `Turn ${b.turn}`;
 
-  battlePart("foeInfo").innerHTML = `
+  battlePart("foeInfo").innerHTML = emo(`
     <div class="row"><span class="name" data-info="foe">${m.name}<span class="info-i inline" aria-hidden="true">i</span>${m.boss ? ` <span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span></span>${elementTag(m.element)}</div>
     ${hpBar(b.monsterHp, m.stats.hp)}
-    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`;
+    <div class="bt-status">${statusChips("monster")}${b.charging && !b.result ? `<span class="st st-heavy" title="Its next attack is a heavy one. Guard, dodge, or break it with Gust or Earthquake.">⚠️ Heavy</span>` : ""}</div>`);
 
   const mana = Array.from({ length: BATTLE.maxMana }, (_, i) =>
     `<span class="pip${i < b.mana ? " full" : ""}"></span>`).join("");
-  battlePart("youInfo").innerHTML = `
+  battlePart("youInfo").innerHTML = emo(`
     <div class="row"><span class="name">${avatarNameHTML(normalizeProfile(state.profile).name)}</span></div>
     ${hpBar(b.heroHp, b.hero.hp)}
     <div class="mana" title="Mana: used by skills. Start with ${BATTLE.startMana}, +${BATTLE.manaPerTurn} each turn, max ${BATTLE.maxMana}.">💧 ${mana}</div>
-    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}</div>`;
+    <div class="bt-status">${statusChips("hero")}${b.guarding && !b.result ? `<span class="st st-guard" title="Guarding: less damage and no status effects this turn">🛡️</span>` : ""}</div>`);
 
   const youSprite = battlePart("youSprite"), foeSprite = battlePart("foeSprite");
   youSprite.classList.toggle("guarding", b.guarding && !b.result);
@@ -2011,7 +2012,7 @@ function renderBattle() {
   youSprite.classList.toggle("fainted", b.result === "lose");
 
   const logBox = battlePart("log");
-  logBox.innerHTML = b.log.map(l => `<div>${l}</div>`).join("");
+  logBox.innerHTML = emo(b.log.map(l => `<div>${l}</div>`).join(""));
   logBox.scrollTop = logBox.scrollHeight;
 
   renderBattleMenu();
@@ -2025,14 +2026,14 @@ function renderBattleMenu() {
   if (b.result) {
     const titles = { win: "🏆 Victory!", lose: "💫 Knocked out", fled: "🏃 You got away" };
     const e = elementById[m.element];
-    menu.innerHTML = `
+    menu.innerHTML = emo(`
       <div class="bt-result">
         <div class="result ${b.result}">${titles[b.result]}</div>
         <div class="small">${b.result === "win"
           ? `You got ${m.reward.drops} ${e.icon} ${e.drop} and ${fmt(m.reward.coins)} 🪙.`
           : `${m.name} is still waiting for you in Adventure. Try again any time.`}</div>
         <button class="primary big" data-k="close">Back to Adventure</button>
-      </div>`;
+      </div>`);
     battlePart("close").onclick = closeBattle;
     if (b.result === "win" && m.boss) showBossVictory();
     return;
@@ -2062,10 +2063,10 @@ function renderBattleMenu() {
       <button data-a="guard" ${myTurn ? "" : "disabled"} title="Take 40% damage and no status effects this turn">🛡️ Guard</button>
       ${skills}`;
   }
-  menu.innerHTML = `
+  menu.innerHTML = emo(`
     <div class="bt-hint small">${b.phase === "monster" || battleUi.busy ? `${m.name}'s turn…` : "Your turn. Pick an action."}</div>
     <div class="actions">${html}
-      <button class="danger" data-a="flee" ${myTurn ? "" : "disabled"}>🏃 Run away</button></div>`;
+      <button class="danger" data-a="flee" ${myTurn ? "" : "disabled"}>🏃 Run away</button></div>`);
   menu.querySelectorAll("[data-a]").forEach(btn => { btn.onclick = () => onHeroAction(btn.dataset.a); });
 }
 
@@ -2168,7 +2169,7 @@ function showPromptBanner(text) {
   const prompt = battlePart("prompt");
   prompt.hidden = false;
   prompt.className = "bt-prompt banner";
-  prompt.innerHTML = `<div class="bt-prompt-card"><div class="bt-prompt-title">${text}</div></div>`;
+  prompt.innerHTML = emo(`<div class="bt-prompt-card"><div class="bt-prompt-title">${text}</div></div>`);
 }
 
 // The dodge/parry prompt. It opens right away at a random spot on the screen and stays open for reactionWindow() ms.
@@ -2181,7 +2182,7 @@ function startReaction(p) {
   const title = p.heavy ? `💥 ${m.name} unleashes a heavy attack!` : p.name === "Attack" ? `${m.name} attacks!` : `${m.name} uses ${p.name}!`;
   prompt.hidden = false;
   prompt.className = "bt-prompt now";
-  prompt.innerHTML = `
+  prompt.innerHTML = emo(`
     <div class="bt-prompt-card">
       <div class="bt-prompt-title">${title}</div>
       <div class="bt-timer"><div class="bt-timer-fill" data-k="timerFill"></div></div>
@@ -2191,7 +2192,7 @@ function startReaction(p) {
         <button type="button" class="react-btn" data-r="parry" ${p.heavy ? `disabled title="Heavy attacks are too strong to parry"` : ""}>⚔️ Parry <kbd>P</kbd></button>
       </div>
       ${p.heavy ? `<div class="small">Too heavy to parry: dodge it!</div>` : ""}
-    </div>`;
+    </div>`);
   restartAnim(battlePart("foeSprite"), "winding");
 
   const r = { open: false, done: false, p };
@@ -2328,7 +2329,7 @@ function renderMerchant() {
     set(slot, "skill", sk ? sk.name : "Empty");
     const info = sk ? skillMetaHTML(`Lv ${skillLevel(id)}`, skillGrade(sk).mana) : "Pick one below";
     const infoEl = slot.querySelector('[data-k="info"]');
-    if (infoEl.innerHTML !== info) infoEl.innerHTML = info;
+    setIconHTML(infoEl, info);
     // Tap or hover the picture of an equipped skill for its info window.
     for (const part of [slot.querySelector('[data-k="frame"]'), slot.querySelector('[data-k="skill"]')]) {
       if (sk) part.dataset.info = `skill:${sk.id}`;
@@ -2346,16 +2347,16 @@ function renderMerchant() {
     const e = elementById[sk.element];
     const meta = skillMetaHTML(level > 0 ? `Lv ${level}` : skillGrade(sk).name, skillGrade(sk).mana);
     const metaEl = card.querySelector('[data-k="meta"]');
-    if (metaEl.innerHTML !== meta) metaEl.innerHTML = meta;
+    setIconHTML(metaEl, meta);
     // The full description and numbers are in the info window (tap or hover the picture, see info-pop.js).
     const buy = card.querySelector('[data-k="buy"]');
     const label = `${level > 0 ? "Level up" : "Buy"} <span class="nw">${fmt(cost)} ${e.icon}</span>`;
-    if (buy.dataset.label !== label) { buy.dataset.label = label; buy.innerHTML = label; }
+    setIconHTML(buy, label);
     buy.disabled = (state.drops[sk.element] || 0) < cost;
     const equip = card.querySelector('[data-k="equip"]');
     const equipped = state.skillSlots.includes(sk.id);
     const eqLabel = equipped ? "Equipped" : "Equip";
-    if (equip.textContent !== eqLabel) equip.textContent = eqLabel;
+    setIconText(equip, eqLabel);
     equip.hidden = level === 0;
     equip.disabled = equipped || slotsFull;
     equip.title = !equipped && slotsFull ? "All 3 slots are full. Remove a skill first." : "";
@@ -2432,7 +2433,7 @@ function renderSouls() {
     const btn = card.querySelector('[data-k="buy"]');
     const maxed = lvl >= ATTRIBUTE_MAX;
     const label = maxed ? "Maxed" : `+1 for ${fmt(attributeCost(a))} 👻`;
-    if (btn.textContent !== label) btn.textContent = label;
+    setIconText(btn, label);
     btn.disabled = maxed || state.souls < attributeCost(a);
   }
 
@@ -2516,7 +2517,7 @@ function renderUpgrades() {
     const cost = masteryCost(e.id);
     const have = state.drops[e.id] || 0;
     const label = maxed ? "Maxed" : `Level up for ${fmt(cost)} ${e.icon}`;
-    if (btn.textContent !== label) btn.textContent = label;
+    setIconText(btn, label);
     btn.disabled = maxed || have < cost;
     set(card, "have", maxed ? "" : `you have ${fmt(have)} ${e.icon}`);
     const haveEl = card.querySelector('[data-k="have"]');
@@ -2532,7 +2533,7 @@ function renderUpgrades() {
     const btn = card.querySelector('[data-k="buy"]');
     const price = card.querySelector('[data-k="price"]');
     if (boonMaxed(bn.id)) {
-      if (btn.textContent !== "Maxed") btn.textContent = "Maxed";
+      setIconText(btn, "Maxed");
       btn.disabled = true;
       price.hidden = true;
       continue;
@@ -2541,11 +2542,11 @@ function renderUpgrades() {
     const oreOk = state.ore[c.ore.id] >= c.oreAmount;
     const essOk = state.drops[bn.element] >= c.essence;
     const label = `Buy level ${lvl + 1}`;
-    if (btn.textContent !== label) btn.textContent = label;
+    setIconText(btn, label);
     btn.disabled = !(oreOk && essOk);
     price.hidden = false;
     const html = `Needs <span class="${oreOk ? "enough" : "short"}">${fmt(c.oreAmount)} ${c.ore.name.toLowerCase()}</span> + <span class="${essOk ? "enough" : "short"}">${fmt(c.essence)} ${e.icon}</span> (you have ${fmt(state.ore[c.ore.id])} and ${fmt(state.drops[bn.element])})`;
-    if (price.innerHTML !== html) price.innerHTML = html;
+    setIconHTML(price, html);
   }
 }
 
@@ -2659,8 +2660,7 @@ function glowAffordable() {
 }
 
 function set(root, key, text) {
-  const node = root.querySelector(`[data-k="${key}"]`);
-  if (node && node.textContent !== text) node.textContent = text;
+  setIconText(root.querySelector(`[data-k="${key}"]`), text);
 }
 
 // Header: how much of each opened ore you have, next to your coins.
@@ -2777,7 +2777,7 @@ function start() {
 
   const spawned = updateSpawns();
   if (spawned > 0) {
-    const before = document.getElementById("log").textContent;
+    const before = document.getElementById("log").dataset.msg || "";
     log(`${before} ${spawned} new monster${spawned > 1 ? "s" : ""} appeared while you were away.`.trim());
   }
 
