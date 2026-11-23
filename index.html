@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Peak Idle: Mine and Smith</title>
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="style.css?v=29">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -85,9 +85,8 @@
     <!-- Skills: skills bought and levelled up with essences -->
     <section class="panel" id="panel-merchant" data-panel="merchant">
       <h2>Skills</h2>
-      <details class="hint"><summary>How it works</summary><p>Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level).</p></details>
       <h3>Your skill slots</h3>
-      <div id="skill-slots"></div>
+      <div id="skill-slots" class="sk-slots"></div>
       <div id="skills"></div>
     </section>
 
@@ -125,12 +124,13 @@
   <!-- Gear picker: choose what to wear in one equipment slot (filled in by game.js) -->
   <div id="gear-picker" class="av-overlay" hidden></div>
 
-  <script src="icons.js?v=28"></script>
-  <script src="avatar.js?v=28"></script>
-  <script src="ores-art.js?v=28"></script>
-  <script src="gear-art.js?v=28"></script>
-  <script src="dwarves.js?v=28"></script>
-  <script src="game.js?v=28"></script>
-  <script src="menu.js?v=28"></script>
+  <script src="icons.js?v=29"></script>
+  <script src="avatar.js?v=29"></script>
+  <script src="ores-art.js?v=29"></script>
+  <script src="gear-art.js?v=29"></script>
+  <script src="skill-art.js?v=29"></script>
+  <script src="dwarves.js?v=29"></script>
+  <script src="game.js?v=29"></script>
+  <script src="menu.js?v=29"></script>
 </body>
 </html>

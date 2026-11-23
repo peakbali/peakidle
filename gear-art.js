@@ -173,7 +173,14 @@ function gearArtSVG(typeId, oreId) {
   if (gearArtCache[key]) return gearArtCache[key];
   const map = GEAR_ART[typeId];
   if (!map) return "";
-  const pal = gearPalette(oreId);
+  const svg = pixelArtSVG(map, gearPalette(oreId), "gear-art");
+  gearArtCache[key] = svg;
+  return svg;
+}
+
+// Turn a text map into an SVG. colors maps each letter to a color; a dark outline is added around
+// the picture and it is centered top to bottom. Also used by the skill pictures (skill-art.js).
+function pixelArtSVG(map, pal, className) {
   // One pixel of room on every side for the outline.
   const H = map.length + 2, W = map[0].length + 2;
   const at = (r, c) => (r >= 1 && r <= map.length && c >= 1 && c <= map[0].length) ? map[r - 1][c - 1] : ".";
@@ -202,7 +209,5 @@ function gearArtSVG(typeId, oreId) {
   const used = grid.map(row => row.some(ch => ch !== "."));
   const top = used.indexOf(true), bottom = used.lastIndexOf(true);
   const shift = Math.round((H - (bottom - top + 1)) / 2) - top;
-  const svg = `<svg class="gear-art" viewBox="0 ${-shift} ${W} ${H}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
-  gearArtCache[key] = svg;
-  return svg;
+  return `<svg class="${className}" viewBox="0 ${-shift} ${W} ${H}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
 }
