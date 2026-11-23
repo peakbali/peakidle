@@ -8,6 +8,7 @@
 </head>
 <body>
   <header>
+    <button id="menu-btn" class="menu-btn" type="button" aria-label="Back to the main menu">🏠 Menu</button>
     <h1>⛏️ Peak Idle</h1>
     <div class="header-right">
       <div id="souls-bar" class="souls-bar" title="Souls are earned by reincarnating. Prices go up a little with every reincarnation.">👻 <span data-k="souls">0</span> Souls <span class="small">· Reincarnations: <span data-k="lives">0</span> · Prices ×<span data-k="priceMult">1.00</span></span></div>
@@ -15,16 +16,19 @@
     </div>
   </header>
 
+  <!-- Phone-only main menu: tap a tile to open that panel. Hidden on bigger screens. -->
+  <nav id="dashboard" class="dashboard" aria-label="Main menu"></nav>
+
   <main>
     <!-- Mining: click to mine, hire miners to mine for you -->
-    <section class="panel">
+    <section class="panel" id="panel-mine" data-panel="mine">
       <h2>Mine</h2>
       <p class="hint">Click an ore to mine it. Hire miners to mine while you're away.</p>
       <div id="ores"></div>
     </section>
 
     <!-- Smithing: turn ore into weapons and armor -->
-    <section class="panel">
+    <section class="panel" id="panel-forge" data-panel="forge">
       <h2>Forge</h2>
       <p class="hint">Turn ore into weapons and armor. Sell them for coins, or equip them to make your hero stronger. Sold gear is gone for good.</p>
       <div id="forge-tabs" class="tabs"></div>
@@ -32,7 +36,7 @@
     </section>
 
     <!-- Hero: stats and the gear you're wearing -->
-    <section class="panel">
+    <section class="panel" id="panel-hero" data-panel="hero">
       <h2>Hero</h2>
       <p class="hint">Your stats go up with the gear you wear and the Soul attributes you buy. Heavy armor gives more defense, light armor more agility.</p>
       <div id="hero-stats" class="hero-stats"></div>
@@ -41,7 +45,7 @@
     </section>
 
     <!-- Adventure: fight monsters for essences and coins -->
-    <section class="panel">
+    <section class="panel" id="panel-adventure" data-panel="adventure">
       <h2>Adventure</h2>
       <p class="hint">A random monster appears every 5 minutes (up to 5 at once), even while the game is closed. Beat the boss to raise the danger level and meet stronger monsters. Losing or running away costs nothing.</p>
       <h3>Essences</h3>
@@ -50,7 +54,7 @@
     </section>
 
     <!-- Merchant: skills bought and levelled up with essences -->
-    <section class="panel">
+    <section class="panel" id="panel-merchant" data-panel="merchant">
       <h2>Merchant</h2>
       <p class="hint">Buy skills with essences from monsters, then equip up to 3 to use in battle. Each skill costs mana when you cast it. Buy a skill again to level it up (+25% strength per level). Skill power adds to your attack for skills.</p>
       <h3>Your skill slots</h3>
@@ -59,12 +63,12 @@
     </section>
 
     <!-- Upgrades bought with coins -->
-    <section class="panel">
+    <section class="panel" id="panel-upgrades" data-panel="upgrades">
       <h2>Upgrades</h2>
       <div id="upgrades"></div>
     </section>
     <!-- Souls: reincarnate for Souls, spend them on permanent attributes -->
-    <section class="panel">
+    <section class="panel" id="panel-souls" data-panel="souls">
       <h2>Souls</h2>
       <p class="hint">Reincarnate to start a new run and earn 👻 Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again.</p>
       <h3>Attributes</h3>
@@ -74,6 +78,9 @@
     </section>
 
   </main>
+
+  <!-- Phone-only tab bar at the bottom of the screen for quick switching. -->
+  <nav id="tabbar" class="tabbar" aria-label="Panels"></nav>
 
   <footer>
     <div id="log"></div>
@@ -86,5 +93,6 @@
   </div>
 
   <script src="game.js"></script>
+  <script src="menu.js"></script>
 </body>
 </html>
