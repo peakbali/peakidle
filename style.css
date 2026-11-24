@@ -42,6 +42,14 @@
 }
 
 * { box-sizing: border-box; }
+
+/* iPhone (Safari) zooms the page in or out when you tap the same spot twice
+   quickly, which happens all the time when tapping the ore. "manipulation"
+   turns off that double-tap zoom but still lets you scroll and pinch-zoom.
+   text-size-adjust stops iPhones from enlarging text on their own. */
+html, body, * { touch-action: manipulation; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+.ore-btn { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 
 body {
