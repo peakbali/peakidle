@@ -1,7 +1,8 @@
 // ---------- Phone back button ----------
 // In the installed app, Android's back button used to leave the page, which showed a black screen.
 // Now the game catches the back button and does what you'd expect in an app:
-//   1. A window is open (monster or skill info, Bestiary, gear picker, look editor, Reset, settings)?
+//   1. A window is open (monster or skill info, Welcome, Congratulations, Bestiary, gear picker,
+//      look editor, Reset, settings)?
 //      Back closes the window on top.
 //   2. In a fight? A finished fight closes like Continue. A fight still going is never lost by
 //      accident: back only shows a hint to use "Run away".
@@ -68,6 +69,9 @@
     // 1. Windows, top-most first.
     const info = visible("info-pop");
     if (info && typeof closeInfoPop === "function") { closeInfoPop(); return true; }
+
+    if (visible("congrats") && typeof closeCongrats === "function") { closeCongrats(); return true; }
+    if (visible("welcome") && typeof closeWelcome === "function") { closeWelcome(); return true; }
 
     const reset = visible("reset-confirm");
     if (reset) { document.getElementById("reset-no").click(); return true; }

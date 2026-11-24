@@ -2,7 +2,7 @@
 // Everything lives in this one file. Progress is saved in your browser (localStorage).
 
 const SAVE_KEY = "peakidle-save-v1"; // kept the same so old saves still load
-const SAVE_VERSION = 13;                // bump when the save format changes (see migrate())
+const SAVE_VERSION = 14;                // bump when the save format changes (see migrate())
 const MAX_OFFLINE_SECONDS = 8 * 60 * 60; // offline mining is capped at 8 hours
 // A message for the player about what the last save upgrade changed (shown once when the game opens).
 let loadNote = "";
@@ -395,6 +395,20 @@ const CATCH = {
   max: 0.95,
 };
 
+// Bestiary milestones: small permanent bonuses for filling in the Bestiary. Kept through reincarnation.
+// There are 10 danger levels with 4 kinds of monster each (40 kinds), and every monster comes in
+// 5 colors (its element: Fire, Ice, Wind, Earth, Lightning), so 200 monster + color pairs in all.
+//   pct:  added to HP, Attack, Defense and Agility, as a % on top of gear and Soul attributes
+//   luck: added to luck (crit chance %)
+// If you got every milestone it adds up to +37% stats and +5% luck: nice, but less than one new ore of gear.
+const BESTIARY_REWARDS = {
+  row:      { pct: 0.01,   luck: 0 }, // x10: catch all 4 kinds of one danger level (any color)
+  rainbow:  { pct: 0.0025, luck: 0 }, // x40: catch one kind of monster in all 5 colors
+  tierAll:  { pct: 0.01,   luck: 0 }, // x10: catch all 4 kinds of one danger level in all 5 colors
+  kinds:    { pct: 0.02,   luck: 0 }, // x1:  catch all 40 kinds (any color)
+  complete: { pct: 0.05,   luck: 5 }, // x1:  the whole Bestiary, every kind in every color
+};
+
 // Each monster has a special move of its own element, which can cause that element's status effect.
 const MONSTER_MOVES = {
   fire:      { name: "Flame Breath", power: 1.15, status: "burn",   chance: 0.6 },
@@ -476,6 +490,9 @@ function freshState() {
     totalSouls: 0,        // all Souls ever earned
     profile: normalizeProfile(null), // your hero's name and look (see avatar.js), also kept on Reset
     bestiary: {},         // monsters you've caught or met, by creature (art key): { seen, caught, el: { element: count } }
+    milestones: {},       // Bestiary milestones reached: id -> when (kept forever, see BESTIARY_REWARDS)
+    milestonesNew: [],    // milestones reached but not celebrated yet (the Congratulations window shows them)
+    welcomed: false,      // has seen the Welcome window (it opens once by itself, then from the [?] button)
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
@@ -569,6 +586,14 @@ function migrate(saved) {
     for (const sp of saved.spawns || []) markSeen(saved, sp);
     if (saved.battle && saved.battle.monster && !saved.battle.monster.boss) markSeen(saved, saved.battle.monster);
     saved.version = 13;
+  }
+  if (saved.version < 14) {
+    // v13 -> v14: the Welcome window and Bestiary milestones. Nothing is reset. Players who already
+    // have a save see the Welcome window once too. Milestones you had already reached are worked out
+    // from your Bestiary when the game loads (checkMilestones in load()), give their bonus straight
+    // away, and are shown together in one Congratulations window.
+    saved.welcomed = false;
+    saved.version = 14;
   }
   // Later versions add their steps here.
   return saved;
@@ -679,6 +704,10 @@ function load() {
       s.spawns = saved.spawns.filter(sp => sp && TIERS[sp.tier - 1] && TIERS[sp.tier - 1].creatures[sp.creature] && elementById[sp.element]);
     }
     s.bestiary = normalizeBestiary(saved.bestiary);
+    for (const [id, when] of Object.entries(saved.milestones || {})) if (milestoneById(id)) s.milestones[id] = when;
+    s.milestonesNew = (Array.isArray(saved.milestonesNew) ? saved.milestonesNew : []).filter(id => s.milestones[id]);
+    if (typeof saved.welcomed === "boolean") s.welcomed = saved.welcomed;
+    checkMilestones(s); // anything already reached (older saves) is added and celebrated once
     s.profile = normalizeProfile(saved.profile);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
@@ -740,7 +769,11 @@ function gearStats() {
 
 // The hero's total stats: base stats + equipped gear + Soul attributes, then Run Boons on top.
 // Battles read their numbers from here.
-function heroStats() {
+function heroStats() { return heroStatsParts().total; }
+
+// The same, plus how much of it came from the Bestiary bonus (for the Hero panel).
+// Order: base + Soul attributes + gear, then the Bestiary bonus (% on top), then Run Boons.
+function heroStatsParts() {
   const total = { ...HERO_BASE_STATS };
   for (const [k, v] of Object.entries(attributeStats())) total[k] += v;
   for (const slot of SLOTS) {
@@ -748,13 +781,21 @@ function heroStats() {
     if (!item) continue;
     for (const [k, v] of Object.entries(recipeById[item.id].stats)) total[k] += v;
   }
+  const bonus = bestiaryBonus();
+  const fromBestiary = {};
+  for (const st of STATS) {
+    const before = total[st.id];
+    if (st.id === "luck") total.luck += bonus.luck;
+    else total[st.id] = Math.round(total[st.id] * (1 + bonus.pct));
+    fromBestiary[st.id] = total[st.id] - before;
+  }
   for (const bn of BOONS) {
     const lvl = boonLevel(bn.id);
     if (!lvl) continue;
     if (bn.pct) total[bn.id] = Math.round(total[bn.id] * (1 + bn.pct * lvl));
     if (bn.flat) total[bn.id] += bn.flat * lvl;
   }
-  return total;
+  return { total, fromBestiary };
 }
 
 // ---------- Mastery and boon rules ----------
@@ -883,6 +924,7 @@ function recordCatch(m) {
   e.caught += 1;
   e.el[m.element] = (e.el[m.element] || 0) + 1;
   if (!e.first) e.first = Date.now();
+  checkMilestones(state);
 }
 
 function normalizeBestiary(saved) {
@@ -1584,6 +1626,9 @@ function reincarnate() {
     totalSmithed: state.totalSmithed,
     profile: state.profile,
     bestiary: state.bestiary, // your collection stays
+    milestones: state.milestones, // and so do its milestones and their bonus
+    milestonesNew: state.milestonesNew,
+    welcomed: state.welcomed,
   };
   state = Object.assign(freshState(), keep);
   sfx("souls");
@@ -1851,7 +1896,7 @@ function monsterCard(m) {
   const lower = m.tier < currentTier();
   const card = el(`
     <div class="card monster mon-card">
-      <div class="mon-pic mon-bg-${m.element}" data-info="mon:${m.uid}">${monsterArtHTML(m)}<span class="info-dot" aria-hidden="true">i</span></div>
+      <div class="mon-pic mon-bg-${m.element}" data-info="mon:${m.uid}">${monsterArtHTML(m)}<span class="info-dot" aria-hidden="true">i</span>${caughtOrb(m)}</div>
       <div class="mon-body">
         <div class="mon-name"><span class="name" data-info="mon:${m.uid}">${m.name}</span>
           <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></div>
@@ -1862,8 +1907,20 @@ function monsterCard(m) {
         <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
       </div>
     </div>`);
+  card.dataset.uid = m.uid;
   wireMonsterCard(card, m);
   return card;
+}
+
+// Has this exact monster (kind and color) been caught before?
+function caughtBefore(m) {
+  const e = state.bestiary[bestiaryKeyOf(m)];
+  return !!(e && e.el && e.el[m.element] > 0);
+}
+// The little catch orb in the bottom-left corner of a monster's picture: bright once caught, a dim shadow until then.
+function caughtOrb(m) {
+  const got = caughtBefore(m);
+  return `<span class="caught-orb${got ? " got" : ""}" data-k="orb" title="${got ? "Already in your Bestiary" : "Not caught yet in this color"}">${pxIcon("orb")}</span>`;
 }
 
 function wireMonsterCard(card, m) {
@@ -1975,12 +2032,205 @@ function renderAdventure() {
   if (refs.adventureKey !== adventureKey()) buildAdventure();
   for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmtShort(state.drops[e.id]));
   renderBestiaryButton();
+  const spawnByUid = Object.fromEntries(state.spawns.map(sp => [sp.uid, sp]));
   for (const card of refs.monsters) {
+    const orb = card.querySelector('[data-k="orb"]');
+    const sp = orb && spawnByUid[card.dataset.uid];
+    if (sp) {
+      const got = caughtBefore(spawnMonster(sp));
+      if (orb.classList.contains("got") !== got) {
+        orb.classList.toggle("got", got);
+        orb.title = got ? "Already in your Bestiary" : "Not caught yet in this color";
+      }
+    }
     const btn = card.querySelector('[data-k="fight"]');
     const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
     setIconText(btn, label);
     btn.disabled = !canFight();
   }
+}
+
+// ---------- Bestiary milestones ----------
+// All 62 milestones (see BESTIARY_REWARDS), in the order they're listed:
+// per danger level: "row:3" (all 4 kinds), "rainbow:hound" (one kind in 5 colors), "tierall:3" (all 4 in 5 colors),
+// then "kinds" (all 40 kinds) and "complete" (all 200).
+var milestoneCache = null; // "var", not "let": load() needs it before this line runs
+function milestoneList() {
+  if (milestoneCache) return milestoneCache;
+  const list = [];
+  TIERS.forEach((t, ti) => {
+    const tier = ti + 1;
+    const keys = t.creatures.map(c => creatureKey(c.name));
+    list.push({ id: `row:${tier}`, kind: "row", tier, keys });
+    t.creatures.forEach(c => list.push({ id: `rainbow:${creatureKey(c.name)}`, kind: "rainbow", tier, keys: [creatureKey(c.name)], name: c.name }));
+    list.push({ id: `tierall:${tier}`, kind: "tierAll", tier, keys });
+  });
+  const all = list.filter(m => m.kind === "rainbow").map(m => m.keys[0]);
+  list.push({ id: "kinds", kind: "kinds", keys: all });
+  list.push({ id: "complete", kind: "complete", keys: all });
+  milestoneCache = list;
+  return list;
+}
+function milestoneById(id) { return milestoneList().find(m => m.id === id); }
+
+// Caught at least once (any color), and caught in every one of the 5 colors.
+function caughtAny(bestiary, key) { return ((bestiary && bestiary[key]) || {}).caught > 0; }
+function caughtAllColors(bestiary, key) {
+  const e = bestiary && bestiary[key];
+  return !!e && ELEMENTS.every(el => (e.el || {})[el.id] > 0);
+}
+function milestoneReached(bestiary, m) {
+  const anyColor = m.kind === "row" || m.kind === "kinds";
+  return m.keys.every(k => anyColor ? caughtAny(bestiary, k) : caughtAllColors(bestiary, k));
+}
+
+// Add every milestone that's been reached but isn't recorded yet. New ones wait in milestonesNew
+// for the Congratulations window. Returns how many were added.
+function checkMilestones(s) {
+  if (!s.milestones) s.milestones = {};
+  if (!Array.isArray(s.milestonesNew)) s.milestonesNew = [];
+  let added = 0;
+  for (const m of milestoneList()) {
+    if (s.milestones[m.id] || !milestoneReached(s.bestiary, m)) continue;
+    s.milestones[m.id] = Date.now();
+    s.milestonesNew.push(m.id);
+    added++;
+  }
+  return added;
+}
+
+// The total bonus from all milestones reached: { pct, luck, count }.
+function bestiaryBonus(s = state) {
+  const out = { pct: 0, luck: 0, count: 0 };
+  for (const id of Object.keys((s && s.milestones) || {})) {
+    const m = milestoneById(id);
+    if (!m) continue;
+    const r = BESTIARY_REWARDS[m.kind];
+    out.pct += r.pct; out.luck += r.luck; out.count++;
+  }
+  out.pct = Math.round(out.pct * 10000) / 10000; // no 0.30000000000000004
+  return out;
+}
+
+// "+1.25%" without trailing zeros.
+function pctText(p) { return `+${+(p * 100).toFixed(2)}%`; }
+function bonusText(r) {
+  const parts = [];
+  if (r.pct) parts.push(`${pctText(r.pct)} HP, Attack, Defense and Agility`);
+  if (r.luck) parts.push(`+${r.luck}% Luck`);
+  return parts.join(" and ");
+}
+
+// What a milestone is called, and a sentence about it.
+function milestoneText(m) {
+  const t = m.tier && TIERS[m.tier - 1];
+  if (m.kind === "row") return { title: `Level ${m.tier} Collected!`, short: `Level ${m.tier}: every kind`,
+    msg: `You caught every monster of <b>${t.name}</b>, one of each kind.` };
+  if (m.kind === "rainbow") return { title: "All 5 Colors!", short: `${m.name} in all 5 colors`,
+    msg: `You caught a <b>${m.name}</b> in every color: Fire, Ice, Wind, Earth and Lightning.` };
+  if (m.kind === "tierAll") return { title: `Level ${m.tier} Mastered!`, short: `Level ${m.tier}: all 5 colors`,
+    msg: `You caught all 4 monsters of <b>${t.name}</b> in all 5 colors.` };
+  if (m.kind === "kinds") return { title: "Every Kind Caught!", short: "All 40 kinds",
+    msg: `All <b>40</b> kinds of monster are in your Bestiary.` };
+  return { title: "Bestiary Complete!", short: "Bestiary complete",
+    msg: `Every monster in every color, all <b>200</b>. You are a true monster master!` };
+}
+
+// Bestiary bonus line in the Hero panel.
+function renderBestiaryBonus() {
+  const box = document.getElementById("bestiary-bonus");
+  if (!box) return;
+  const b = bestiaryBonus();
+  setIconHTML(box, b.count
+    ? `📖 <b>Bestiary bonus:</b> ${bonusText(b)} <span class="num">(${b.count}/${milestoneList().length} milestones)</span>`
+    : `📖 <b>Bestiary bonus:</b> none yet. Catch monsters in Adventure to earn small permanent stat bonuses.`);
+}
+
+// ---------- Congratulations window (Bestiary milestones) ----------
+// Opens by itself once nothing else is on screen (not during a fight). Several milestones reached
+// at once (or by an older save) are shown together in one window.
+
+// Most special first: the biggest one is the headline.
+const MILESTONE_RANK = { complete: 0, kinds: 1, tierAll: 2, row: 3, rainbow: 4 };
+
+function congratsArt(m) {
+  if (m.kind === "kinds" || m.kind === "complete") return `<div class="cg-trophy">${emo("🏆")}</div>`;
+  const list = bestiaryList();
+  let mons;
+  if (m.kind === "rainbow") {
+    const c = list.find(x => x.key === m.keys[0]);
+    mons = ELEMENTS.map(el => bestiaryMonster(c, el.id));
+  } else {
+    mons = m.keys.map((k, i) => {
+      const c = list.find(x => x.key === k);
+      return bestiaryMonster(c, m.kind === "tierAll" ? ELEMENTS[i % ELEMENTS.length].id : bestiaryElement(state.bestiary[k]));
+    });
+  }
+  return `<div class="cg-mons">${mons.map(x => `<span class="cg-mon mon-bg-${x.element}">${monsterArtHTML(x)}</span>`).join("")}</div>`;
+}
+
+function openCongrats() {
+  const box = document.getElementById("congrats");
+  if (!box) return;
+  const ms = state.milestonesNew.map(milestoneById).filter(Boolean)
+    .sort((a, b) => MILESTONE_RANK[a.kind] - MILESTONE_RANK[b.kind]);
+  if (!ms.length) { state.milestonesNew = []; return; }
+  const top = ms[0];
+  const text = milestoneText(top);
+  const colors = ["#ffd34d", "#ff8a3a", "#7dffc4", "#7ac8ff", "#ff6bd0", "#ffffff"];
+  const confetti = Array.from({ length: 30 }, (_, i) =>
+    `<i style="--x:${(i * 29) % 100}%;--d:${((i * 0.37) % 2.4).toFixed(2)}s;--s:${(2.4 + (i % 5) * 0.45).toFixed(2)}s;--r:${(i * 47) % 360}deg;background:${colors[i % colors.length]}"></i>`).join("");
+  const rows = ms.map(m => {
+    const r = BESTIARY_REWARDS[m.kind];
+    return `<div class="vic-row cg-row"><span>${milestoneText(m).short}</span><span class="cg-gain">${pctText(r.pct)}${r.luck ? `, +${r.luck}% Luck` : ""}</span></div>`;
+  }).join("");
+  const total = bestiaryBonus();
+  box.innerHTML = emo(`
+    <div class="vic-rays"></div>
+    <div class="vic-confetti">${confetti}</div>
+    <div class="vic-card cg-card" role="dialog" aria-modal="true" aria-labelledby="cg-title">
+      <div class="vic-kicker">Congratulations!</div>
+      <div class="vic-title cg-title" id="cg-title">${ms.length > 1 ? `${ms.length} Milestones!` : text.title}</div>
+      ${congratsArt(top)}
+      <div class="vic-msg">${ms.length > 1 ? `You filled in more of your Bestiary. ${text.msg}` : text.msg}</div>
+      <div class="cg-label">Permanent bonus${ms.length > 1 ? "es" : ""}</div>
+      <div class="vic-rewards cg-rows">${rows}</div>
+      <div class="cg-total">📖 Your Bestiary bonus is now <b>${bonusText(total)}</b>. It stays forever, even when you reincarnate.</div>
+      <button class="primary big wide" type="button" data-k="cgClose">Hooray!</button>
+    </div>`);
+  box.querySelector('[data-k="cgClose"]').onclick = closeCongrats;
+  box.hidden = false;
+  document.body.classList.add("in-editor");
+  if (typeof sfx === "function") sfx("win");
+}
+function closeCongrats() {
+  const box = document.getElementById("congrats");
+  if (!box || box.hidden) return;
+  box.hidden = true;
+  box.innerHTML = "";
+  document.body.classList.remove("in-editor");
+  state.milestonesNew = [];
+  save();
+}
+
+// Nothing else on screen: no fight, no other window, settings closed.
+function screenIsFree() {
+  const open = id => { const x = document.getElementById(id); return x && !x.hidden; };
+  return !["battle", "avatar-editor", "gear-picker", "bestiary", "reset-confirm", "welcome", "congrats", "info-pop"].some(open);
+}
+
+// Called after every render: the Welcome window first (once), then any Congratulations waiting.
+function showWaitingPopups() {
+  if (!screenIsFree()) return;
+  if (!state.welcomed) { if (typeof openWelcome === "function") openWelcome(); return; }
+  if (state.milestonesNew && state.milestonesNew.length) openCongrats();
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("keydown", e => {
+    const box = document.getElementById("congrats");
+    if (e.key === "Escape" && box && !box.hidden) closeCongrats();
+  });
 }
 
 // ---------- Bestiary window ----------
@@ -2034,10 +2284,11 @@ function closeBestiary() {
 function renderBestiary() {
   const box = document.getElementById("bestiary");
   if (!box || box.hidden) return;
-  const key = JSON.stringify(state.bestiary);
+  const key = JSON.stringify(state.bestiary) + Object.keys(state.milestones).length;
   if (key === bestiaryShown) return;
   bestiaryShown = key;
   const { caught, kinds, total } = bestiaryCounts();
+  const bonus = bestiaryBonus();
   const list = bestiaryList();
   const sections = TIERS.map((t, ti) => {
     const cards = list.filter(c => c.tier === ti + 1).map(c => {
@@ -2046,8 +2297,9 @@ function renderBestiary() {
       const seen = e && e.seen;
       const m = bestiaryMonster(c, bestiaryElement(e));
       const dots = ELEMENTS.map(el => `<i class="bs-dot${e && e.el[el.id] ? ` on el-${el.id}` : ""}" title="${el.name}${e && e.el[el.id] ? `: ${e.el[el.id]} caught` : ": not caught yet"}"></i>`).join("");
+      const rainbow = state.milestones[`rainbow:${c.key}`];
       return `
-        <div class="bs-card${got ? " got" : " missing"}" data-info="best:${c.key}">
+        <div class="bs-card${got ? " got" : " missing"}${rainbow ? " rainbow" : ""}" data-info="best:${c.key}"${rainbow ? ` title="Caught in all 5 colors"` : ""}>
           <div class="bs-pic${got ? ` mon-bg-${m.element}` : ""}">${monsterArtHTML(m)}</div>
           <div class="bs-name">${got || seen ? c.name : "???"}</div>
           <div class="bs-count small num">${got ? `×${fmt(e.caught)}` : seen ? "Seen" : "Not seen"}</div>
@@ -2055,7 +2307,11 @@ function renderBestiary() {
         </div>`;
     }).join("");
     const here = ti + 1 <= currentTier();
-    return `<div class="bs-zone"><span class="tag">Lv ${ti + 1}</span> ${here ? t.name : "???"}</div><div class="bs-grid">${cards}</div>`;
+    const badges = [
+      state.milestones[`row:${ti + 1}`] ? `<span class="bs-badge" title="Every kind caught">🏆 All kinds</span>` : "",
+      state.milestones[`tierall:${ti + 1}`] ? `<span class="bs-badge gold" title="Every kind caught in all 5 colors">👑 All colors</span>` : "",
+    ].join("");
+    return `<div class="bs-zone"><span class="tag">Lv ${ti + 1}</span> <span class="bs-zone-name">${here ? t.name : "???"}</span>${badges}</div><div class="bs-grid">${cards}</div>`;
   }).join("");
   box.innerHTML = emo(`
     <div class="av-card bs-card-box" role="dialog" aria-modal="true" aria-label="Bestiary">
@@ -2064,7 +2320,17 @@ function renderBestiary() {
         <button type="button" class="gp-close" data-close aria-label="Close">✕</button>
       </div>
       <div class="bs-sum"><span><b class="num">${caught}</b> / ${kinds} kinds caught</span><span><b class="num">${fmt(total)}</b> caught in all</span></div>
-      <div class="small">Use 🪤 Catch in a fight to add a monster. Each dot is an element you've caught it in. Tap a monster to see more.</div>
+      <div class="small">Use 🪤 Catch in a fight to add a monster. Each dot is a color (element) you've caught it in. Tap a monster to see more.</div>
+      <details class="hint bs-rewards"><summary>📖 Rewards: <b class="num">${bonus.count}</b>/${milestoneList().length} milestones${bonus.count ? `, ${pctText(bonus.pct)} stats${bonus.luck ? `, +${bonus.luck}% luck` : ""}` : ""}</summary>
+        <p>Each milestone gives a small bonus to HP, Attack, Defense and Agility that lasts forever:</p>
+        <ul>
+          <li>Catch all 4 kinds of one danger level (any color): <b>${pctText(BESTIARY_REWARDS.row.pct)}</b></li>
+          <li>Catch one kind of monster in all 5 colors: <b>${pctText(BESTIARY_REWARDS.rainbow.pct)}</b></li>
+          <li>Catch all 4 kinds of one danger level in all 5 colors: <b>${pctText(BESTIARY_REWARDS.tierAll.pct)}</b></li>
+          <li>Catch all 40 kinds: <b>${pctText(BESTIARY_REWARDS.kinds.pct)}</b></li>
+          <li>Complete the Bestiary (all 40 kinds in all 5 colors): <b>${bonusText(BESTIARY_REWARDS.complete)}</b></li>
+        </ul>
+      </details>
       ${sections}
     </div>`);
   box.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeBestiary));
@@ -3009,21 +3275,24 @@ function render() {
   renderMerchant();
   if (typeof refreshInfoPop === "function") refreshInfoPop();
 
-  const hero = heroStats();
+  const { total: hero, fromBestiary } = heroStatsParts();
   const gear = gearStats();
   const attrs = attributeStats();
   for (const st of STATS) {
     const parts = [];
     if (gear[st.id] > 0) parts.push(`+${fmt(gear[st.id])} gear`);
     if (attrs[st.id] > 0) parts.push(`+${fmt(attrs[st.id])} souls`);
-    const boon = hero[st.id] - HERO_BASE_STATS[st.id] - gear[st.id] - (attrs[st.id] || 0);
+    if (fromBestiary[st.id] > 0) parts.push(`+${fmt(fromBestiary[st.id])} bestiary`);
+    const boon = hero[st.id] - HERO_BASE_STATS[st.id] - gear[st.id] - (attrs[st.id] || 0) - fromBestiary[st.id];
     if (boon > 0) parts.push(`+${fmt(boon)} boons`);
     set(refs.stats[st.id], "total", fmt(hero[st.id]) + (st.id === "luck" ? "%" : ""));
     set(refs.stats[st.id], "bonus", parts.length ? `(${parts.join(", ")})` : "");
   }
+  renderBestiaryBonus();
   renderSouls();
   renderEquipSlots();
   glowAffordable();
+  if (typeof showWaitingPopups === "function") showWaitingPopups();
 }
 
 // ---------- Main loop ----------
@@ -3086,6 +3355,7 @@ function start() {
     const profile = state.profile; // your hero's look isn't progress, so it stays
     state = freshState();
     state.profile = profile;
+    state.welcomed = true; // you've seen the Welcome window already ([?] still opens it)
     save();
     renderBattle();
     buildUI();

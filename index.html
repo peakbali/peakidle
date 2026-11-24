@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=43">
+  <link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -26,6 +26,8 @@
       <div id="souls-bar" class="chip chip-souls" title="Souls are earned by reincarnating. Spend them on attributes in the Souls panel."><span class="px-slot" data-icon="souls"></span><span class="num" data-k="souls">0</span></div>
       <div id="ore-bar" class="ore-bar" aria-label="Your ore"></div>
     </div>
+    <!-- [?] opens the Welcome window (the little how-to-play guide) again -->
+    <button id="help-btn" class="icon-btn help-btn" type="button" aria-label="How to play" title="How to play"><span class="px-slot" data-icon="help"></span></button>
     <div class="settings">
       <button id="settings-btn" class="icon-btn" type="button" aria-label="Settings" aria-expanded="false" aria-controls="settings-pop"><span class="px-slot" data-icon="gear"></span></button>
       <div id="settings-pop" class="settings-pop" hidden>
@@ -107,6 +109,7 @@
         <span class="profile-text"><span class="profile-name num" data-profile-name>Hero</span><span class="small">Tap to change your look</span></span>
       </button>
       <div id="hero-stats" class="hero-stats"></div>
+      <p id="bestiary-bonus" class="best-bonus small"></p>
       <h3>Equipment</h3>
       <div id="hero-slots"></div>
     </section>
@@ -166,7 +169,37 @@
   <div id="gear-picker" class="av-overlay" hidden></div>
   <div id="bestiary" class="av-overlay" hidden></div>
 
-  <script src="icons.js?v=41"></script>
+  <!-- Welcome window: a one-screen guide for new players. Opens once by itself, then from the [?] button. -->
+  <div id="welcome" class="av-overlay" hidden>
+    <div class="av-card wl-card" role="dialog" aria-modal="true" aria-labelledby="wl-title">
+      <div class="gp-head">
+        <h3 id="wl-title">Welcome to Peak Idle!</h3>
+        <button type="button" class="gp-close" data-wl-close aria-label="Close"><span class="px-slot ti-slot" data-icon="close"></span></button>
+      </div>
+      <p class="wl-intro">Dig ore, forge gear and fight monsters. Here's where to go:</p>
+      <ol class="wl-steps">
+        <li><span class="wl-icon px-slot" data-icon="mine"></span><span><b>Mine</b>: tap an ore to dig it. Hire dwarf miners to dig for you, even while you're away.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="forge"></span><span><b>Forge</b>: turn ore into swords and armor. Sell them for coins, or keep them to wear.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="hero"></span><span><b>Hero</b>: tap a slot to put on your gear. Better gear means a stronger hero.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="adventure"></span><span><b>Adventure</b>: fight monsters for coins and essences. Catch them for your Bestiary, and beat the boss to go deeper.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="merchant"></span><span><b>Skills</b>: spend essences on magic skills to use in fights.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="upgrades"></span><span><b>Upgrades</b>: a better pickaxe and anvil, plus power-ups for your hero.</span></li>
+        <li><span class="wl-icon px-slot" data-icon="souls"></span><span><b>Souls</b>: when you get stuck, reincarnate. You start over but earn Souls for stats that last forever.</span></li>
+      </ol>
+      <p class="wl-tip"><span class="px-slot ti-slot" data-icon="sparkle"></span> First step: mine some copper, forge a copper sword, and put it on!</p>
+      <div class="wl-letter">
+        <p>Thank you for playing. Enjoy the game!</p>
+        <p class="wl-sign">Sincerely,<br><span class="wl-name">Khen Marvin</span></p>
+      </div>
+      <p class="small wl-again">Tap <span class="px-slot ti-slot" data-icon="help"></span> at the top any time to see this again.</p>
+      <button type="button" class="primary big wide" data-wl-close>Let's go!</button>
+    </div>
+  </div>
+
+  <!-- Congratulations window for Bestiary milestones (filled in by game.js) -->
+  <div id="congrats" class="vic-overlay cg-overlay" hidden></div>
+
+  <script src="icons.js?v=44"></script>
   <script src="avatar.js?v=41"></script>
   <script src="ores-art.js?v=41"></script>
   <script src="gear-art.js?v=41"></script>
@@ -174,11 +207,12 @@
   <script src="monster-art.js?v=41"></script>
   <script src="zone-art.js?v=41"></script>
   <script src="dwarves.js?v=41"></script>
-  <script src="game.js?v=41"></script>
+  <script src="game.js?v=44"></script>
   <script src="info-pop.js?v=42"></script>
-  <script src="menu.js?v=41"></script>
+  <script src="menu.js?v=44"></script>
   <script src="pwa.js?v=41"></script>
-  <script src="back.js?v=41"></script>
+  <script src="welcome.js?v=44"></script>
+  <script src="back.js?v=44"></script>
   <script src="sound.js?v=41"></script>
 </body>
 </html>

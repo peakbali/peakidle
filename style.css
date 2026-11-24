@@ -1938,3 +1938,76 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   background: #e8d9c0;
   box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 #fff4e0;
 }
+
+/* ---------- [?] button in the header (opens the Welcome window) ---------- */
+.help-btn { flex: none; }
+@media (max-width: 700px) {
+  /* Sits between Souls and the gear on the top line, a bit smaller so the line still fits */
+  .help-btn { order: 2; width: 30px; height: 34px; }
+  .help-btn .px-slot { width: 20px; height: 20px; }
+}
+
+/* ---------- Welcome window ---------- */
+.wl-card { width: min(520px, 100%); gap: 8px; }
+.wl-intro, .wl-tip, .wl-again { margin: 0; }
+.wl-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.wl-steps li {
+  display: grid; grid-template-columns: 30px 1fr; gap: 9px; align-items: center;
+  padding: 5px 8px; font-size: 14px; line-height: 1.3;
+  background: rgba(0, 0, 0, 0.28); box-shadow: inset 0 0 0 2px var(--outline);
+}
+.wl-steps b { font-family: var(--px); font-weight: normal; font-size: 20px; color: var(--accent-hi); }
+.wl-icon { width: 30px; height: 30px; }
+.wl-tip { font-size: 14px; color: var(--good); }
+.wl-letter {
+  padding: 9px 12px; color: #3a2614; font-size: 15px;
+  background: linear-gradient(180deg, #ecdcb0, #d9c08a);
+  box-shadow: inset 0 0 0 2px #a8875a, 0 0 0 2px var(--outline);
+}
+.wl-letter p { margin: 0; }
+.wl-sign { margin-top: 4px !important; text-align: right; }
+.wl-name { font-family: var(--px); font-size: 28px; line-height: 1; color: #7a3a12; }
+@media (max-width: 700px) {
+  .wl-steps li { font-size: 13px; padding: 4px 7px; gap: 7px; grid-template-columns: 26px 1fr; }
+  .wl-icon { width: 26px; height: 26px; }
+  .wl-steps b { font-size: 18px; }
+}
+
+/* ---------- Bestiary bonus and milestones ---------- */
+.best-bonus { margin: 8px 0 0; line-height: 1.35; }
+.best-bonus b { color: var(--accent-hi); font-weight: normal; font-family: var(--px); font-size: 17px; }
+.bs-zone-name { flex: 0 1 auto; min-width: 0; }
+.bs-badge {
+  font-family: var(--px); font-size: 15px; line-height: 1; padding: 2px 6px; white-space: nowrap;
+  color: var(--good); background: rgba(0, 0, 0, 0.35); box-shadow: inset 0 0 0 2px #3c5a2a;
+}
+.bs-badge.gold { color: #ffd34d; box-shadow: inset 0 0 0 2px #8a6a1c; }
+.bs-card.rainbow { box-shadow: inset 0 0 0 2px #c99a2e; }
+.bs-rewards ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; display: grid; gap: 2px; }
+.bs-rewards p { margin: 4px 0 0; font-size: 13px; }
+@media (max-width: 700px) { .bs-zone { flex-wrap: wrap; row-gap: 4px; } }
+
+/* ---------- Congratulations window (Bestiary milestones) ---------- */
+.cg-overlay { z-index: 210; }
+.cg-title { font-size: 50px; line-height: 0.9; }
+.cg-mons { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; animation: vic-pop 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) 0.2s both; }
+.cg-mon {
+  width: 60px; height: 60px; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 60%, var(--mc-soft), transparent 70%);
+}
+.cg-mon .mon-art { width: 54px; height: 54px; }
+.cg-trophy { width: 96px; height: 96px; animation: vic-pop 0.7s cubic-bezier(0.2, 1.5, 0.4, 1) 0.2s both; filter: drop-shadow(0 0 12px rgba(255, 200, 80, 0.7)); }
+.cg-trophy svg.px-icon.ti { width: 100%; height: 100%; }
+.cg-label { font-family: var(--px); font-size: 18px; line-height: 1; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.cg-rows .vic-row { animation-delay: 0.5s; }
+.cg-row { font-size: 14px; text-align: left; }
+.cg-gain { font-family: var(--px); font-size: 20px; color: var(--good); white-space: nowrap; }
+.cg-total { font-size: 14px; color: var(--text); }
+.cg-total b { color: var(--accent-hi); font-weight: normal; }
+@media (max-width: 700px) { .cg-title { font-size: 44px; } .cg-mon { width: 52px; height: 52px; } .cg-mon .mon-art { width: 46px; height: 46px; } }
+
+/* Catch orb on a monster card: bright when this monster (kind + color) is in your Bestiary */
+.caught-orb { position: absolute; left: 6px; bottom: 6px; z-index: 4; width: 22px; height: 22px; }
+.caught-orb:not(.got) { opacity: 0.28; filter: grayscale(1) brightness(0.7); }
+.caught-orb.got { filter: drop-shadow(0 0 3px rgba(255, 200, 90, 0.6)); }
+@media (max-width: 700px) { .caught-orb { left: 4px; bottom: 4px; width: 22px; height: 22px; } }
