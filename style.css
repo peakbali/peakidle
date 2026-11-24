@@ -1877,3 +1877,64 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
   transition: opacity 0.2s, transform 0.2s;
 }
 .back-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- Sound settings (music and sound effects) ---------- */
+.sound-box {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 2px solid var(--line);
+}
+.sound-box h3 { margin: 0; font-size: 15px; }
+.sound-row {
+  display: grid;
+  grid-template-columns: 58px 50px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.sound-toggle { padding: 2px 0; min-height: 32px; font-family: var(--px); font-size: 20px; line-height: 1; }
+.sound-num { text-align: right; font-family: var(--px); font-size: 20px; color: var(--muted); }
+/* Pixel slider: a dark groove filled with amber up to the volume, and a square knob */
+.sound-vol {
+  --fill: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.sound-vol:disabled { opacity: 0.4; cursor: not-allowed; }
+.sound-vol:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 2px; }
+.sound-vol::-webkit-slider-runnable-track {
+  height: 10px;
+  border: 2px solid var(--outline);
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--stone-dark) var(--fill));
+  box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+.sound-vol::-moz-range-track {
+  height: 6px;
+  border: 2px solid var(--outline);
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--stone-dark) var(--fill));
+}
+.sound-vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 22px;
+  margin-top: -8px;
+  border: 2px solid var(--outline);
+  border-radius: 0;
+  background: #e8d9c0;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 #fff4e0;
+}
+.sound-vol::-moz-range-thumb {
+  width: 12px;
+  height: 18px;
+  border: 2px solid var(--outline);
+  border-radius: 0;
+  background: #e8d9c0;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 #fff4e0;
+}
