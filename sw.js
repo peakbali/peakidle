@@ -6,7 +6,7 @@
 // So after a merge, players get the new version the next time they open the game.
 // This file never touches your save (that lives in localStorage, not here).
 
-const CACHE = "peakidle-v1"; // raise this if you ever want to throw away all saved copies
+const CACHE = "peakidle-v2"; // raise this if you ever want to throw away all saved copies
 const WAIT_MS = 4000;        // how long to wait for the internet before using the saved copy
 
 // The files the game needs to start, saved on install so the first offline start works.
