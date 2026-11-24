@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=42">
+  <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -37,6 +37,22 @@
         <div class="row"><span>Reincarnations</span><b class="num" data-k="lives">0</b></div>
         <div class="row"><span>Prices</span><b class="num">×<span data-k="priceMult">1.00</span></b></div>
         <p class="small">Miner, mine and upgrade prices go up 10% with every reincarnation. Skill prices never do. The game saves by itself every few seconds.</p>
+        <div class="sound-box">
+          <h3>Sound</h3>
+          <div class="sound-row">
+            <span class="sound-label">Music</span>
+            <button id="music-toggle" class="sound-toggle" type="button" aria-pressed="true" aria-label="Music on or off">On</button>
+            <input id="music-vol" class="sound-vol" type="range" min="0" max="100" step="5" value="50" aria-label="Music volume">
+            <span id="music-vol-num" class="sound-num num">50</span>
+          </div>
+          <div class="sound-row">
+            <span class="sound-label">Sounds</span>
+            <button id="sfx-toggle" class="sound-toggle" type="button" aria-pressed="true" aria-label="Sound effects on or off">On</button>
+            <input id="sfx-vol" class="sound-vol" type="range" min="0" max="100" step="5" value="70" aria-label="Sound effects volume">
+            <span id="sfx-vol-num" class="sound-num num">70</span>
+          </div>
+          <p id="sound-note" class="small">Music starts when you tap the game. It pauses when the app is in the background.</p>
+        </div>
         <div id="install-box" class="install-box">
           <h3>Play as an app</h3>
           <p id="install-text" class="small"></p>
@@ -150,18 +166,19 @@
   <div id="gear-picker" class="av-overlay" hidden></div>
   <div id="bestiary" class="av-overlay" hidden></div>
 
-  <script src="icons.js?v=40"></script>
-  <script src="avatar.js?v=40"></script>
-  <script src="ores-art.js?v=40"></script>
-  <script src="gear-art.js?v=40"></script>
-  <script src="skill-art.js?v=40"></script>
-  <script src="monster-art.js?v=40"></script>
-  <script src="zone-art.js?v=40"></script>
-  <script src="dwarves.js?v=40"></script>
-  <script src="game.js?v=40"></script>
-  <script src="info-pop.js?v=41"></script>
-  <script src="menu.js?v=40"></script>
-  <script src="pwa.js?v=40"></script>
-  <script src="back.js?v=40"></script>
+  <script src="icons.js?v=41"></script>
+  <script src="avatar.js?v=41"></script>
+  <script src="ores-art.js?v=41"></script>
+  <script src="gear-art.js?v=41"></script>
+  <script src="skill-art.js?v=41"></script>
+  <script src="monster-art.js?v=41"></script>
+  <script src="zone-art.js?v=41"></script>
+  <script src="dwarves.js?v=41"></script>
+  <script src="game.js?v=41"></script>
+  <script src="info-pop.js?v=42"></script>
+  <script src="menu.js?v=41"></script>
+  <script src="pwa.js?v=41"></script>
+  <script src="back.js?v=41"></script>
+  <script src="sound.js?v=41"></script>
 </body>
 </html>

@@ -937,6 +937,11 @@ function rollHit({ attack, defense, attackEl, targetEl, critChance, dodge, extra
 // ---------- Actions ----------
 
 // All coin income goes through here, so we know how much you earned this run (for Souls).
+// Play a sound effect (sound.js makes them). Does nothing if sound is off or not loaded.
+function sfx(name, extra) {
+  if (typeof window !== "undefined" && typeof window.peakSfx === "function") window.peakSfx(name, extra);
+}
+
 function earnCoins(n) {
   state.coins += n;
   state.runCoins += n;
@@ -946,6 +951,7 @@ function mine(oreId) {
   const ore = oreById[oreId];
   if (!state.unlocked[oreId]) return;
   state.ore[oreId] += clickAmount(ore);
+  sfx("mine", ORES.indexOf(ore));
   render();
 }
 
@@ -955,6 +961,7 @@ function hireMiner(oreId) {
   if (state.coins < cost) return;
   state.coins -= cost;
   state.miners[oreId] += 1;
+  sfx("buy");
   render();
 }
 
@@ -964,6 +971,7 @@ function unlockOre(oreId) {
   if (state.unlocked[oreId] || state.coins < cost) return;
   state.coins -= cost;
   state.unlocked[oreId] = true;
+  sfx("unlock");
   log(`You opened a ${ore.name} mine!`);
   buildUI();
 }
@@ -979,6 +987,7 @@ function smith(recipeId, count) {
   state.ore[r.ore] -= n * r.cost;
   state.items[r.id] += n;
   state.totalSmithed += n;
+  sfx("forge");
   render();
 }
 
@@ -990,6 +999,7 @@ function sell(recipeId) {
   state.items[r.id] = 0;
   const coins = n * sellPrice(r);
   earnCoins(coins);
+  sfx("sell");
   render();
   return coins;
 }
@@ -1007,6 +1017,7 @@ function equip(recipeId) {
   unequip(r.slot);
   state.items[r.id] -= 1;
   state.equipped[r.slot] = { id: r.id };
+  sfx("equip");
   render();
 }
 
@@ -1027,6 +1038,7 @@ function buySkill(skillId) {
   if (state.drops[sk.element] < cost) return;
   state.drops[sk.element] -= cost;
   state.skills[sk.id] = skillLevel(sk.id) + 1;
+  sfx("buy");
   if (state.skills[sk.id] === 1) {
     log(`You learned ${sk.name}!`);
     const free = state.skillSlots.indexOf(null);
@@ -1099,6 +1111,7 @@ function startBattle(uid) {
     state.battle.phase = "monster";
   }
   save();
+  sfx("roar", !!m.boss);
   openBattle();
 }
 
@@ -1290,6 +1303,7 @@ function castSkill(sk, level, m) {
   const e = elementById[sk.element];
   const lvl = skillLevelMult(level);
   battleLog(`You cast ${e.icon} ${sk.name}!`);
+  sfx("magic");
   if (sk.guard) b.guarding = true;
   if (sk.power) {
     const attack = b.hero.attack * sk.power * lvl;
@@ -1438,6 +1452,9 @@ function endBattle(result) {
   b.result = result;
   b.pending = null;
   if (result === "caught") recordCatch(m);
+  // A short wait so the last hit's sound plays first.
+  const endSound = { win: "win", caught: "catch", lose: "lose" }[result];
+  if (endSound && typeof setTimeout !== "undefined") setTimeout(() => sfx(endSound), 350);
   if (result === "win" || result === "caught") {
     state.drops[m.element] += m.reward.drops;
     earnCoins(m.reward.coins);
@@ -1482,6 +1499,7 @@ function buyPickaxe() {
   if (state.coins < cost) return;
   state.coins -= cost;
   state.pickaxe += 1;
+  sfx("buy");
   render();
 }
 
@@ -1490,6 +1508,7 @@ function buyAnvil() {
   if (state.coins < cost) return;
   state.coins -= cost;
   state.anvil += 1;
+  sfx("buy");
   render();
 }
 
@@ -1520,6 +1539,7 @@ function buyAttribute(id) {
   if (attributeLevel(id) >= ATTRIBUTE_MAX || state.souls < cost) return;
   state.souls -= cost;
   state.attributes[id] = attributeLevel(id) + 1;
+  sfx("buy");
   save();
   render();
 }
@@ -1530,6 +1550,7 @@ function buyMastery(elId) {
   if (masteryLevel(elId) >= MASTERY.max || state.drops[elId] < cost) return;
   state.drops[elId] -= cost;
   state.mastery[elId] = masteryLevel(elId) + 1;
+  sfx("buy");
   log(`${elementById[elId].icon} ${elementById[elId].name} Mastery is now level ${state.mastery[elId]}.`);
   save();
   render();
@@ -1542,6 +1563,7 @@ function buyBoon(id) {
   state.ore[c.ore.id] -= c.oreAmount;
   state.drops[boonById[id].element] -= c.essence;
   state.boons[id] = boonLevel(id) + 1;
+  sfx("buy");
   log(`${boonById[id].name} is now level ${state.boons[id]} for this run.`);
   save();
   render();
@@ -1564,6 +1586,7 @@ function reincarnate() {
     bestiary: state.bestiary, // your collection stays
   };
   state = Object.assign(freshState(), keep);
+  sfx("souls");
   forgeOre = "copper";
   save();
   renderBattle();
@@ -2314,6 +2337,17 @@ function showBossVictory() {
 }
 
 // Floating numbers and shakes for what just happened. Shown one after another.
+// Which sound goes with a battle pop-up.
+function battleSound(f) {
+  const k = f.kind;
+  if (k === "hit") sfx(f.side === "hero" ? "hurt" : "hit");
+  else if (k === "crit") sfx(f.side === "hero" ? "hurt" : "crit");
+  else if (k === "burn" || k === "poison") sfx("tick");
+  else if (k === "heal") sfx("heal");
+  else if (k === "miss") sfx(f.text === "Broke free" ? "escape" : "miss");
+  else if (k === "status" && f.text !== "Caught!") sfx("status");
+}
+
 function playBattleFx() {
   const queue = battleFxQueue;
   battleFxQueue = [];
@@ -2321,6 +2355,7 @@ function playBattleFx() {
     const box = battlePart(f.side === "hero" ? "youFx" : "foeFx");
     const sprite = battlePart(f.side === "hero" ? "youSprite" : "foeSprite");
     if (!box) return;
+    battleSound(f);
     const pop = el(`<div class="bt-pop pop-${f.kind}">${f.text}</div>`);
     pop.style.marginLeft = `${[0, -36, 36][i % 3]}px`; // spread out numbers that land together
     box.appendChild(pop);
@@ -2458,7 +2493,8 @@ function pressReaction(kind) {
   const r = battleUi.reaction;
   if (!r || r.done || !r.kinds.includes(kind)) return;
   if (kind === "parry" && r.p.heavy) return;
-  if (!r.open) return settleReaction("early", "Too early!");
+  if (!r.open) { sfx("fail"); return settleReaction("early", "Too early!"); }
+  sfx(kind);
   const btn = battlePart("prompt").querySelector(`[data-r="${kind}"]`);
   if (btn) btn.classList.add("picked");
   settleReaction(kind, kind === "dodge" ? "Dodge!" : "Parry!");
