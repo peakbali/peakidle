@@ -327,7 +327,7 @@ const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", ear
 const SPAWN = {
   max: 3,                 // 3 monsters wait at once. Beat (or catch) one and a new one takes its place right away.
   newRun: 3,              // a new game or reincarnation starts with 3 monsters already waiting
-  lowerTierChance: 0.4,   // 40% of spawns are one tier below yours (from tier 2 up), for variety
+  lowerTierChance: 0.3,   // 30% of spawns are one level below the boss level (from level 2 up), 70% are at the boss level
 };
 
 // Monster stats grow exponentially with tier: stat = start * growth ^ step.
