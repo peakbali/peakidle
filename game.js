@@ -2441,7 +2441,7 @@ function buildBattleScreen() {
           <div class="bt-fx" data-k="foeFx"></div>
         </div>
         <div class="bt-spot you">
-          <div class="bt-sprite bt-hero" data-k="youSprite">${avatarSVG(state.profile, "full")}${weapon ? `<span class="bt-weapon">${gearIcon(weapon)}</span>` : ""}</div>
+          <div class="bt-sprite bt-hero" data-k="youSprite">${avatarSVG(state.profile, "full", "", weapon)}</div>
           <div class="bt-pad"></div>
           <div class="bt-fx" data-k="youFx"></div>
         </div>
