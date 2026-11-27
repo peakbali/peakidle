@@ -2154,7 +2154,7 @@ body:has(#battle:not([hidden])) #panel-adventure * { animation-play-state: pause
 .cg-total b { color: var(--accent-hi); font-weight: normal; }
 @media (max-width: 700px) { .cg-title { font-size: 44px; } .cg-mon { width: 52px; height: 52px; } .cg-mon .mon-art { width: 46px; height: 46px; } }
 
-/* Catch orb on a monster card: bright when this monster (kind + color) is in your Bestiary */
+/* Catch cage on a monster card: bright when this monster (kind + color) is in your Bestiary */
 .caught-orb { position: absolute; left: 6px; bottom: 6px; z-index: 4; width: 22px; height: 22px; }
 .caught-orb:not(.got) { opacity: 0.28; filter: grayscale(1) brightness(0.7); }
 .caught-orb.got { filter: drop-shadow(0 0 3px rgba(255, 200, 90, 0.6)); }
