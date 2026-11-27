@@ -3099,7 +3099,11 @@ function buildUI() {
             <div class="name ore-title">${o.name} ore: <span class="num" data-k="amount"></span></div>
             <div class="small ore-stats">Miners: <span data-k="miners"></span> · <span data-k="rate"></span>/sec</div>
           </div>
-          <button class="ore-btn" title="Mine ${o.name}">${oreIcon(o)}</button>
+          <button class="ore-btn" title="Mine ${o.name}" aria-label="Mine ${o.name}" style="--i:${ORES.indexOf(o)}">
+            <span class="ore-glow"></span><span class="ore-shadow"></span>
+            <span class="ore-bob">${typeof oreArtBigSVG === "function" ? oreArtBigSVG(o.id) || oreIcon(o) : oreIcon(o)}</span>
+            <span class="ore-sparkles"><i></i><i></i><i></i></span>
+          </button>
           <div class="ore-hire">
             <button data-k="hire">Hire miner (<span data-k="hireCost"></span> 🪙)</button>
           </div>
@@ -3108,7 +3112,8 @@ function buildUI() {
         const before = state.ore[o.id];
         mine(o.id);
         const got = state.ore[o.id] - before;
-        if (got > 0) floatText(e.currentTarget, `+${fmtRate(got)}`);
+        oreHit(e.currentTarget, o.id, e);
+        if (got > 0) floatText(e.currentTarget, `+${fmtRate(got)}`, o.id);
       };
       card.querySelector('[data-k="hire"]').onclick = () => hireMiner(o.id);
       refs.ores[o.id] = card;
@@ -3165,15 +3170,55 @@ function buildUI() {
   render();
 }
 
-// A small "+5" that floats up from the ore you just clicked.
-function floatText(anchor, text) {
+// The ore squashes and flashes when you hit it.
+function oreHit(btn, oreId, e) {
+  btn.classList.remove("hit");
+  void btn.offsetWidth; // restart the animation
+  btn.classList.add("hit");
+  // A burst of little ore chips flying out from where you tapped (the middle for keyboard).
+  const spot = btn.parentElement;
+  const sh = typeof oreShades === "function" ? oreShades(oreId) : ["#4a2306", "#7a3a10", "#b05a20", "#e07b39", "#f0a070", "#ffe0c0"];
+  const r = btn.getBoundingClientRect();
+  let x = r.width / 2, y = r.height / 2;
+  if (e && e.clientX && e.clientY) {
+    x = Math.min(r.width, Math.max(0, e.clientX - r.left));
+    y = Math.min(r.height, Math.max(0, e.clientY - r.top));
+  }
+  const n = 7;
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2 + Math.random() * 0.7;
+    const d = 26 + Math.random() * 30;
+    const chip = el(`<span class="ore-chip-fx" aria-hidden="true"></span>`);
+    chip.style.left = `${btn.offsetLeft + x}px`;
+    chip.style.top = `${btn.offsetTop + y}px`;
+    chip.style.setProperty("--dx", `${Math.cos(a) * d}px`);
+    chip.style.setProperty("--dy", `${Math.sin(a) * d - 14}px`);
+    chip.style.setProperty("--c", sh[3 + (k % 3)]);
+    chip.style.setProperty("--o", sh[0]);
+    chip.style.animationDuration = `${0.5 + Math.random() * 0.25}s`;
+    spot.appendChild(chip);
+    chip.addEventListener("animationend", () => chip.remove());
+    setTimeout(() => chip.remove(), 1200);
+  }
+}
+
+// A big "+5" in the ore's own colors that pops out of the ore you just clicked and floats away.
+function floatText(anchor, text, oreId) {
   const spot = anchor.parentElement;
-  const pop = el(`<span class="float-num" aria-hidden="true">${text}</span>`);
-  pop.style.left = `${anchor.offsetLeft + anchor.offsetWidth / 2 + (Math.random() * 16 - 8)}px`;
-  pop.style.top = `${anchor.offsetTop + 4}px`;
+  const sh = typeof oreShades === "function" && oreId ? oreShades(oreId) : null;
+  const pop = el(`<span class="float-num" aria-hidden="true"><span>${text}</span></span>`);
+  pop.style.left = `${anchor.offsetLeft + anchor.offsetWidth / 2 + (Math.random() * 24 - 12)}px`;
+  pop.style.top = `${anchor.offsetTop + anchor.offsetHeight * 0.18}px`;
+  pop.style.setProperty("--drift", `${Math.random() * 30 - 15}px`);
+  pop.style.setProperty("--tilt", `${Math.random() * 16 - 8}deg`);
+  if (sh) {
+    pop.style.setProperty("--fc", sh[4]);
+    pop.style.setProperty("--fm", sh[3]);
+    pop.style.setProperty("--fo", sh[0]);
+  }
   spot.appendChild(pop);
-  pop.addEventListener("animationend", () => pop.remove());
-  setTimeout(() => pop.remove(), 1500); // in case animations are switched off
+  pop.addEventListener("animationend", ev => { if (ev.target === pop) pop.remove(); });
+  setTimeout(() => pop.remove(), 1600); // in case animations are switched off
 }
 
 // A short glow on buy buttons the moment you can afford them.

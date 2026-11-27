@@ -6,6 +6,10 @@
 // Purely for looks: nothing here touches the game or the save.
 
 const ORE_ART_SIZE = 20;
+// The drawings below are written for a 20 x 20 grid. The big Mine button draws the
+// same ores on a 40 x 40 grid (twice the detail), so these two can change while drawing.
+let OA_N = ORE_ART_SIZE; // pixels across the grid being drawn
+let OA_S = 1;            // grid pixels per drawing unit
 
 // Each ore's main color (the same colors the ores had before).
 const ORE_COLORS = {
@@ -31,6 +35,7 @@ function oaPalette(base) {
 
 // Same "random" number every time for the same pixel, so the texture never flickers.
 function oaHash(x, y, seed) {
+  x = Math.floor(x + 0.5); y = Math.floor(y + 0.5); // big grid: one value per 2 x 2 block, so dents stay chunky
   let h = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -39,22 +44,29 @@ function oaHash(x, y, seed) {
 const OA_LIGHT = (() => { const v = [-0.55, -0.65, 0.55], n = Math.hypot(...v); return v.map((c) => c / n); })();
 
 function oaGrid() {
-  return Array.from({ length: ORE_ART_SIZE }, () => Array(ORE_ART_SIZE).fill(null));
+  return Array.from({ length: OA_N }, () => Array(OA_N).fill(null));
 }
+// One real grid pixel.
+function oaPx(g, x, y, c, o) {
+  if (x >= 0 && y >= 0 && x < OA_N && y < OA_N) g[y][x] = { c, o };
+}
+// One drawing-unit pixel (a 2 x 2 block on the big grid).
 function oaSet(g, x, y, c, o) {
-  if (x >= 0 && y >= 0 && x < ORE_ART_SIZE && y < ORE_ART_SIZE) g[y][x] = { c, o };
+  x = Math.floor(x); y = Math.floor(y);
+  for (let j = 0; j < OA_S; j++) for (let i = 0; i < OA_S; i++) oaPx(g, x * OA_S + i, y * OA_S + j, c, o);
 }
 
 // Paint a mask. sep = draw a dark line where this shape overlaps what is already behind it.
 function oaPaint(g, inside, colorAt, outline, sep) {
-  const hit = [];
-  for (let y = 0; y < ORE_ART_SIZE; y++) for (let x = 0; x < ORE_ART_SIZE; x++) if (inside(x + 0.5, y + 0.5)) hit.push([x, y]);
+  // Works on real grid pixels, but inside() and colorAt() get drawing units.
+  const hit = [], S = OA_S;
+  for (let y = 0; y < OA_N; y++) for (let x = 0; x < OA_N; x++) if (inside((x + 0.5) / S, (y + 0.5) / S)) hit.push([x, y]);
   const mine = new Set(hit.map(([x, y]) => x + "," + y));
-  for (const [x, y] of hit) { const c = colorAt(x, y); if (c) oaSet(g, x, y, c, outline); }
+  for (const [x, y] of hit) { const c = colorAt((x + 0.5) / S - 0.5, (y + 0.5) / S - 0.5); if (c) oaPx(g, x, y, c, outline); }
   if (sep) {
     for (const [x, y] of hit) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx, ny = y + dy;
-      if (!mine.has(nx + "," + ny) && g[ny] && g[ny][nx]) oaSet(g, nx, ny, sep, outline);
+      if (!mine.has(nx + "," + ny) && g[ny] && g[ny][nx]) oaPx(g, nx, ny, sep, outline);
     }
   }
 }
@@ -112,7 +124,7 @@ function oaDots(g, dots, outline) {
 // Dark outline around everything, then a soft shadow under it.
 function oaOutline(g) {
   const out = [];
-  for (let y = 0; y < ORE_ART_SIZE; y++) for (let x = 0; x < ORE_ART_SIZE; x++) {
+  for (let y = 0; y < OA_N; y++) for (let x = 0; x < OA_N; x++) {
     if (g[y][x]) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const n = g[y + dy] && g[y + dy][x + dx];
@@ -240,6 +252,36 @@ const ORE_DRAW = {
   },
 };
 
+// Big-picture extra: light catches the top-left edge, the bottom-right edge sinks
+// into shadow, so the ore looks rounded and solid instead of flat.
+function oaBevel(g) {
+  const N = OA_N, empty = (x, y) => !(g[y] && g[y][x]);
+  const changes = [];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const c = g[y][x];
+    if (!c) continue;
+    if (empty(x - 1, y) || empty(x, y - 1) || empty(x - 1, y - 1)) changes.push([x, y, oaMix(c.c, "#ffffff", 0.32), c.o]);
+    else if (empty(x + 1, y) || empty(x, y + 1)) changes.push([x, y, oaMix(c.c, "#000000", 0.3), c.o]);
+  }
+  for (const [x, y, c, o] of changes) g[y][x] = { c, o };
+}
+
+function oaToSVG(g, cls) {
+  // Join neighbouring pixels of the same color into one rectangle to keep the picture small.
+  let rects = "";
+  for (let y = 0; y < OA_N; y++) {
+    for (let x = 0; x < OA_N;) {
+      const cell = g[y][x];
+      if (!cell) { x++; continue; }
+      let w = 1;
+      while (x + w < OA_N && g[y][x + w] && g[y][x + w].c === cell.c) w++;
+      rects += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${cell.c}"/>`;
+      x += w;
+    }
+  }
+  return `<svg class="${cls}" viewBox="0 0 ${OA_N} ${OA_N}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+}
+
 const oreArtCache = {};
 
 // Returns the <svg> picture for one ore (cached, it never changes).
@@ -250,19 +292,30 @@ function oreArtSVG(oreId) {
   const g = oaGrid();
   draw(g, oaPalette(ORE_COLORS[oreId]));
   oaOutline(g);
-  // Join neighbouring pixels of the same color into one rectangle to keep the picture small.
-  let rects = "";
-  for (let y = 0; y < ORE_ART_SIZE; y++) {
-    for (let x = 0; x < ORE_ART_SIZE;) {
-      const cell = g[y][x];
-      if (!cell) { x++; continue; }
-      let w = 1;
-      while (x + w < ORE_ART_SIZE && g[y][x + w] && g[y][x + w].c === cell.c) w++;
-      rects += `<rect x="${x}" y="${y}" width="${w}" height="1" fill="${cell.c}"/>`;
-      x += w;
-    }
+  return (oreArtCache[oreId] = oaToSVG(g, "ore-art"));
+}
+
+const oreArtBigCache = {};
+
+// The detailed picture for the big ore you tap on the Mine page: the same drawing
+// on a 40 x 40 grid, with finer rock texture and a lit, rounded edge.
+function oreArtBigSVG(oreId) {
+  if (oreArtBigCache[oreId]) return oreArtBigCache[oreId];
+  const draw = ORE_DRAW[oreId];
+  if (!draw) return "";
+  OA_N = ORE_ART_SIZE * 2; OA_S = 2;
+  try {
+    const g = oaGrid();
+    draw(g, oaPalette(ORE_COLORS[oreId]));
+    oaBevel(g);
+    oaOutline(g);
+    return (oreArtBigCache[oreId] = oaToSVG(g, "ore-art ore-art-big"));
+  } finally {
+    OA_N = ORE_ART_SIZE; OA_S = 1;
   }
-  const svg = `<svg class="ore-art" viewBox="0 0 ${ORE_ART_SIZE} ${ORE_ART_SIZE}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
-  oreArtCache[oreId] = svg;
-  return svg;
+}
+
+// The ore's shades (outline, darkest, dark, main, light, shine) for the click effects.
+function oreShades(oreId) {
+  return oaPalette(ORE_COLORS[oreId] || "#e07b39");
 }
