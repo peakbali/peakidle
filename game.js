@@ -1917,10 +1917,10 @@ function caughtBefore(m) {
   const e = state.bestiary[bestiaryKeyOf(m)];
   return !!(e && e.el && e.el[m.element] > 0);
 }
-// The little catch orb in the bottom-left corner of a monster's picture: bright once caught, a dim shadow until then.
+// The little catch cage in the bottom-left corner of a monster's picture: bright once caught, a dim shadow until then.
 function caughtOrb(m) {
   const got = caughtBefore(m);
-  return `<span class="caught-orb${got ? " got" : ""}" data-k="orb" title="${got ? "Already in your Bestiary" : "Not caught yet in this color"}">${pxIcon("orb")}</span>`;
+  return `<span class="caught-orb${got ? " got" : ""}" data-k="orb" title="${got ? "Already in your Bestiary" : "Not caught yet in this color"}">${pxIcon("cage")}</span>`;
 }
 
 function wireMonsterCard(card, m) {
