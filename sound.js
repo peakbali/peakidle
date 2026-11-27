@@ -330,6 +330,11 @@
       kick(out, t, 0.25, 220, 90, 0.09);
       anvil(out, t + 0.005, 0.06, pitch, 0.18, false);
     },
+    // A dwarf you tapped: a startled "huh?!" chirp going up.
+    huh(out, t) {
+      tone(out, "square", 420, t, 0.09, 0.06, 0.003, 0.07, false, 700);
+      tone(out, "square", 900, t + 0.09, 0.12, 0.06, 0.003, 0.1, false, 1500);
+    },
     // Coins out of your purse: two bright blips.
     buy(out, t) {
       tone(out, "square", 988, t, 0.07, 0.08, 0.003, 0.03);

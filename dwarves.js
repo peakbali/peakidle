@@ -2,7 +2,7 @@
 // One little animated dwarf per opened mine, drawn in code as pixel art (no image files).
 // Every ore has its own dwarf: helmet, beard, headlamp, clothes, tool and mining move.
 // The dwarf works faster for every 10 miners you hire at that ore (up to speed 10).
-// With no miners the dwarf sleeps. Purely for looks: nothing here touches the game or the save.
+// With no miners the dwarf sleeps. Tap a dwarf to startle it. Purely for looks: nothing here touches the game or the save.
 //
 // The drawing is a tiny 28 x 22 pixel grid. The dwarf stands on the left facing right,
 // a rock with ore specks sits on the right, and the tool swings around the dwarf's hand.
@@ -10,6 +10,7 @@
 const DWARF_SPEED_STEP = 10;   // +1 speed for every 10 miners
 const DWARF_MAX_SPEED = 10;    // speed 10 is reached at 90 miners
 const DWARF_SPEED_GAIN = 0.3;  // each speed step makes the move 30% quicker than speed 1
+const DWARF_SURPRISE_MS = 800; // how long the "!" jump lasts when you tap a dwarf (matches style.css)
 
 // Each ore's dwarf. Colors: helmet, beard, tunic, tool metal, sparks, ore specks in the rock.
 // anim is the mining move (see DWARF_ANIMS below), base = seconds per move at speed 1.
@@ -161,6 +162,7 @@ function dwarfSVG(oreId) {
     ${dwR(5, 7, 6, 4, skin)}${dwR(11, 9, 1, 1, skinDark)}${dwR(5, 8, 1, 2, skinDark)}
     <g class="dw-eye-open">${dwR(9, 8, 1, 1, eyeC)}</g>
     <g class="dw-eye-shut">${dwR(8, 8, 2, 1, "#5a4030")}</g>
+    <g class="dw-eye-wow">${dwR(8, 7, 2, 2, "#fff")}${dwR(9, 8, 1, 1, eyeC)}</g>
     ${dwHelmet(L.helmet, L.helmetC)}
     ${lamp}
     ${dwBeard(L.beard, L.beardC)}
@@ -169,6 +171,7 @@ function dwarfSVG(oreId) {
   </g>
   <g class="dw-sparks">${sparks}</g>
   ${zee(13, 4, "z1")}${zee(17, 0, "z2")}
+  <g class="dw-wow">${dwR(13, -3, 4, 6, "#2a1a10")}${dwR(13, 3, 4, 4, "#2a1a10")}${dwR(14, -2, 2, 4, "#ffe27a")}${dwR(14, -2, 1, 4, "#fff6c4")}${dwR(14, 4, 2, 2, "#ffe27a")}</g>
 </svg>`;
 }
 
@@ -219,7 +222,7 @@ function dwarfKeyframesCSS() {
   let css = "";
   for (const [name, a] of Object.entries(DWARF_ANIMS)) {
     css += `@keyframes dw-tool-${name}{${a.tool}}\n`;
-    css += `.dwarf.dw-${name}:not(.sleep) .dw-tool{animation:dw-tool-${name} var(--dur) ease-in-out infinite}\n`;
+    css += `.dwarf.dw-${name}:not(.sleep):not(.surprised) .dw-tool{animation:dw-tool-${name} var(--dur) ease-in-out infinite}\n`;
 
     // Sparks: invisible until a hit, then they fly out and fade.
     let sp = "0%{opacity:0;transform:translate(0,0)}";
@@ -236,10 +239,10 @@ function dwarfKeyframesCSS() {
     bob += "100%{transform:translate(0,0)}";
     rock += "100%{transform:translate(0,0)}";
     css += `@keyframes dw-spark-${name}{${sp}}\n@keyframes dw-bob-${name}{${bob}}\n`;
-    css += `.dwarf.dw-${name}:not(.sleep) .dw-spark{animation:dw-spark-${name} var(--dur) linear infinite}\n`;
-    css += `.dwarf.dw-${name}:not(.sleep) .dw-body{animation:dw-bob-${name} var(--dur) ease-in-out infinite}\n`;
+    css += `.dwarf.dw-${name}:not(.sleep):not(.surprised) .dw-spark{animation:dw-spark-${name} var(--dur) linear infinite}\n`;
+    css += `.dwarf.dw-${name}:not(.sleep):not(.surprised) .dw-body{animation:dw-bob-${name} var(--dur) ease-in-out infinite}\n`;
     if (a.shake) {
-      css += `@keyframes dw-rock-${name}{${rock}}\n.dwarf.dw-${name}:not(.sleep) .dw-rock{animation:dw-rock-${name} var(--dur) linear infinite}\n`;
+      css += `@keyframes dw-rock-${name}{${rock}}\n.dwarf.dw-${name}:not(.sleep):not(.surprised) .dw-rock{animation:dw-rock-${name} var(--dur) linear infinite}\n`;
     }
   }
   return css;
@@ -255,4 +258,19 @@ function dwarfKeyframesCSS() {
   const sync = () => document.body.classList.toggle("dw-paused", document.hidden);
   document.addEventListener("visibilitychange", sync);
   sync();
+
+  // Tap a dwarf and it jumps in surprise ("!"), then goes back to work.
+  // Only a class is added for a moment: no re-drawing, and the save is never touched.
+  document.addEventListener("click", e => {
+    const fig = e.target && e.target.closest ? e.target.closest(".dwarf") : null;
+    if (!fig) return;
+    clearTimeout(fig._dwT);
+    if (fig.classList.contains("surprised")) {
+      fig.classList.remove("surprised");
+      void fig.getBoundingClientRect(); // restart the jump on a quick second tap
+    }
+    fig.classList.add("surprised");
+    fig._dwT = setTimeout(() => fig.classList.remove("surprised"), DWARF_SURPRISE_MS);
+    if (typeof window.peakSfx === "function") window.peakSfx("huh");
+  });
 })();
