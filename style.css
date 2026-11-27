@@ -1211,6 +1211,39 @@ button.primary .el { color: #241406; background: rgba(0, 0, 0, 0.12); border-col
 @keyframes dw-breathe { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(0, 0.5px); } }
 @keyframes dw-zfloat { 0% { opacity: 0; transform: translate(0, 2px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(2px, -3px); } }
 
+/* Tapped: the dwarf jumps with wide eyes and a "!" pops up, then goes back to mining.
+   dwarves.js adds .surprised for 0.8s. Only transform and opacity move, so it stays cheap. */
+.dwarf { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.dw-eye-wow { display: none; }
+.dw-wow { opacity: 0; transform-box: view-box; transform-origin: 15px 6px; }
+.dwarf.surprised .dw-eye-open, .dwarf.surprised .dw-eye-shut, .dwarf.surprised .dw-z,
+.dwarf.surprised .dw-beam { display: none; }
+.dwarf.surprised .dw-eye-wow { display: inline; }
+.dwarf.surprised .dw-body { animation: dw-jump 0.8s ease-out; }
+.dwarf.surprised .dw-tool { animation: dw-drop 0.8s ease-out; }
+.dwarf.surprised .dw-wow { animation: dw-wow 0.8s steps(1, end), dw-wow-pop 0.8s ease-out; }
+.dwarf.surprised .dw-spark { animation: none; opacity: 0; }
+.dwarf.surprised .dw-rock { animation: none; }
+@keyframes dw-jump {
+  0% { transform: translate(0, 0); }
+  14% { transform: translate(0, -3px); }
+  30% { transform: translate(0, -3.5px); }
+  48% { transform: translate(0, 0); }
+  58% { transform: translate(0, -0.8px); }
+  68%, 100% { transform: translate(0, 0); }
+}
+@keyframes dw-drop {
+  0% { transform: rotate(-20deg); }
+  18%, 80% { transform: rotate(104deg); }
+  100% { transform: rotate(-20deg); }
+}
+@keyframes dw-wow { 0% { opacity: 0; } 8%, 88% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes dw-wow-pop {
+  0% { transform: translate(0, 3px) scale(0.4); }
+  16% { transform: translate(0, -1.5px) scale(1.15); }
+  26%, 100% { transform: translate(0, 0) scale(1); }
+}
+
 /* Hidden tab or a battle on screen: freeze the dwarves to save battery */
 body.dw-paused .dwarf *,
 body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !important; }
@@ -1219,6 +1252,7 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
 @media (prefers-reduced-motion: reduce) {
   .dwarf * { animation: none !important; }
   .dwarf:not(.sleep) .dw-tool { transform: rotate(-20deg); }
+  .dwarf.surprised .dw-wow { opacity: 1; }
 }
 
 /* Desktop columns are narrow: a slightly smaller ore button */
