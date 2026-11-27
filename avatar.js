@@ -286,8 +286,36 @@ function avatarGrid(p) {
   return g;
 }
 
+// The sword in the hero's right hand (the side facing the monster), blade up toward the monster.
+// The sword picture from gear-art.js is laid over the hand, then a 3x3 fist is drawn on top of the grip,
+// so the grip comes out above and below the fingers like the hero is really holding it.
+function avatarHeldSword(p, held, outline) {
+  const map = typeof GEAR_ART !== "undefined" && GEAR_ART[held.type];
+  if (!map) return "";
+  const { rects } = pixelArtRects(map, gearPalette(held.ore));
+  // Top-left pixel of the hand at the end of the right arm (see avatarGrid).
+  const [hx, hy] = p.body === "woman" ? [16, 22] : [17, 23];
+  // Sword map pixel (2, 10) sits under the fist's top-left. pixelArtRects draws map (c, r) at (c + 1, r + 1).
+  const tx = hx - 3, ty = hy - 11;
+  let out = `<g transform="translate(${tx} ${ty})"><g class="av-sword">${rects}</g></g>`;
+  const pix = (x, y, c) => { out += `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"/>`; };
+  const isSword = (x, y) => { const r = y - ty - 1, c = x - tx - 1; return map[r] && map[r][c] && map[r][c] !== "."; };
+  // A dark edge around the fist, except where the sword pokes out of it.
+  for (let y = hy - 1; y <= hy + 3; y++) for (let x = hx - 1; x <= hx + 3; x++) {
+    const ring = y === hy - 1 || y === hy + 3 || x === hx - 1 || x === hx + 3;
+    if (ring && y >= hy && !isSword(x, y)) pix(x, y, outline);
+  }
+  // The fist: lit knuckles on top, fingers curled underneath.
+  const skin = avatarColor("skin", p.skin), skinD = avatarShade(skin, 0.8), skinL = avatarShade(skin, 1.15);
+  const fist = [[skinL, skin, skin], [skin, skin, skinD], [skinD, skinD, skinD]];
+  fist.forEach((row, j) => row.forEach((c, i) => pix(hx + i, hy + j, c)));
+  pix(hx + 1, hy + 1, skinD); // a line between the fingers
+  return out;
+}
+
 // Builds the SVG. view "full" = whole hero, "portrait" = just the head and shoulders.
-function avatarSVG(profile, view = "full", cls = "") {
+// held (optional, "full" view only): the sword the hero grips in their right hand, e.g. { type: "sword", ore: "iron" }.
+function avatarSVG(profile, view = "full", cls = "", held = null) {
   const p = normalizeProfile(profile);
   const g = avatarGrid(p);
   const outline = "#140e0b";
@@ -312,7 +340,11 @@ function avatarSVG(profile, view = "full", cls = "") {
       x = end;
     }
   }
-  const box = view === "portrait" ? "3 0 18 18" : `0 0 ${AVATAR_W} ${AVATAR_H}`;
+  let box = view === "portrait" ? "3 0 18 18" : `0 0 ${AVATAR_W} ${AVATAR_H}`;
+  if (view === "full" && held) {
+    const grip = avatarHeldSword(p, held, outline);
+    if (grip) { rects += grip; box = `0 0 ${AVATAR_W + 7} ${AVATAR_H}`; }
+  }
   return `<svg class="avatar ${cls}" viewBox="${box}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
 }
 

@@ -182,6 +182,14 @@ function gearArtSVG(typeId, oreId) {
 // the picture and it is centered top to bottom. Also used by the skill pictures (skill-art.js).
 // classes (optional) gives some letters a CSS class, e.g. { E: "m-eye" } so glowing eyes can pulse.
 function pixelArtSVG(map, pal, className, classes = null) {
+  const { rects, H, W, shift } = pixelArtRects(map, pal, classes);
+  return `<svg class="${className}" viewBox="0 ${-shift} ${W} ${H}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+}
+
+// The <rect>s of a text map with its outline, without the <svg> around them. The outline adds one
+// pixel on every side, so map pixel (col, row) is drawn at (col + 1, row + 1).
+// shift is how far to move it down to center it top to bottom.
+function pixelArtRects(map, pal, classes = null) {
   // One pixel of room on every side for the outline.
   const H = map.length + 2, W = map[0].length + 2;
   const at = (r, c) => (r >= 1 && r <= map.length && c >= 1 && c <= map[0].length) ? map[r - 1][c - 1] : ".";
@@ -211,5 +219,5 @@ function pixelArtSVG(map, pal, className, classes = null) {
   const used = grid.map(row => row.some(ch => ch !== "."));
   const top = used.indexOf(true), bottom = used.lastIndexOf(true);
   const shift = Math.round((H - (bottom - top + 1)) / 2) - top;
-  return `<svg class="${className}" viewBox="0 ${-shift} ${W} ${H}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
+  return { rects, H, W, shift };
 }

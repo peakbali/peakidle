@@ -812,11 +812,12 @@ body.in-battle { overflow: hidden; }
 }
 .bt-spot.foe.boss .bt-sprite { font-size: clamp(80px, 17vh, 170px); }
 .bt-spot.you .bt-sprite { font-size: clamp(56px, 11vh, 110px); }
-.bt-weapon { position: absolute; right: -0.3em; bottom: 0; font-size: 0.45em; }
-.bt-weapon .gear-art { width: 1.1em; height: 1.1em; display: block; }
-/* Your hero, drawn from the look you picked in the appearance editor */
-.bt-hero .avatar { display: block; height: 1.8em; width: auto; }
-.bt-hero .bt-weapon { right: -0.15em; bottom: 0.1em; }
+/* Your hero, drawn from the look you picked in the appearance editor, sword in hand */
+.bt-hero .avatar { display: block; height: 1.8em; width: auto; overflow: visible; }
+/* The sword swings around the fist when you attack */
+.av-sword { transform-box: fill-box; transform-origin: 25% 69%; }
+.bt-spot.you .bt-sprite.lunge .av-sword { animation: av-swing 0.35s ease; }
+@keyframes av-swing { 0% { transform: rotate(0); } 35% { transform: rotate(-35deg); } 70% { transform: rotate(40deg); } 100% { transform: rotate(0); } }
 .bt-pad {
   width: 75%; max-width: 240px; height: 26px; margin-top: -14px;
   border-radius: 50%; background: radial-gradient(ellipse at center, var(--pad) 0%, transparent 70%);
