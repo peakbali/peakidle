@@ -505,8 +505,6 @@ button.glow { animation: afford-glow 0.9s ease-out 2; }
   width: var(--ob);
   height: var(--ob);
   padding: 0;
-  --btn-bg: rgba(10, 7, 5, 0.55);
-  border-color: rgba(0, 0, 0, 0.75);
 }
 .ore-card .ore-hire { grid-area: hire; }
 .ore-card .ore-hire button { display: block; width: 100%; padding: 7px 10px; white-space: nowrap; }
@@ -520,21 +518,61 @@ button.glow { animation: afford-glow 0.9s ease-out 2; }
   .ore-card .ore-btn { width: 100%; height: 100px; }
   .ore-card .ore-hire button { font-size: 14px; padding: 6px 4px; }
 }
+/* "+5" when you mine: pops out big in the ore's colors, wobbles, floats up and fades. */
 .float-num {
+  --fc: #fff3c4;   /* top of the letters */
+  --fm: #ffc94a;   /* bottom of the letters */
+  --fo: #3a1a04;   /* outline */
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translate(-50%, 0);
+  animation: float-rise 1.05s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.float-num > span {
+  display: block;
+  font-size: 40px;
+  line-height: 1;
+  color: var(--fc);
+  background: linear-gradient(180deg, var(--fc) 30%, var(--fm) 70%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(2px 0 0 var(--fo)) drop-shadow(-2px 0 0 var(--fo))
+    drop-shadow(0 2px 0 var(--fo)) drop-shadow(0 -2px 0 var(--fo))
+    drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45));
+  animation: float-pop 0.42s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes float-rise {
+  0%   { opacity: 1; transform: translate(-50%, 0); }
+  65%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--drift, 0px)), -64px); }
+}
+@keyframes float-pop {
+  0%   { transform: scale(0.3) rotate(0deg); }
+  55%  { transform: scale(1.35) rotate(var(--tilt, 0deg)); }
+  100% { transform: scale(1) rotate(calc(var(--tilt, 0deg) * 0.4)); }
+}
+
+/* Little square ore chips that fly out when you hit the ore, then fall and fade. */
+.ore-chip-fx {
   position: absolute;
   z-index: 3;
-  transform: translate(-50%, 0);
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  background: var(--c, #e07b39);
+  box-shadow: 0 0 0 1px var(--o, #2a1408);
   pointer-events: none;
-  font-size: 25px;
-  color: #ffe58f;
-  text-shadow: 2px 2px 0 #4a2306, -1px -1px 0 #4a2306;
-  white-space: nowrap;
-  animation: float-up 0.9s ease-out forwards;
+  animation: chip-fly 0.6s ease-out forwards;
 }
-@keyframes float-up {
-  0%   { opacity: 0; transform: translate(-50%, 6px) scale(0.8); }
-  15%  { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
-  100% { opacity: 0; transform: translate(-50%, -42px) scale(1); }
+.ore-chip-fx:nth-child(odd) { width: 4px; height: 4px; margin: -2px 0 0 -2px; }
+@keyframes chip-fly {
+  0%   { opacity: 1; transform: translate(0, 0) rotate(0deg); }
+  60%  { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(120deg); }
+  100% { opacity: 0; transform: translate(calc(var(--dx) * 1.15), calc(var(--dy) + 22px)) rotate(200deg); }
 }
 
 /* ---------- Footer: the latest message ---------- */
@@ -1185,19 +1223,121 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
 /* Desktop columns are narrow: a slightly smaller ore button */
 @media (min-width: 701px) {
   .ore-card { --ob: clamp(96px, 40cqw, 116px); column-gap: 10px; padding: 8px; }
-  .ore-card .ore-btn .ore-art { width: 74px; height: 74px; }
 }
 
 /* Very small phones: smaller button so the name still fits beside it */
 @media (max-width: 340px) {
   .ore-card { --ob: 104px; column-gap: 8px; padding: 8px; }
-  .ore-card .ore-btn .ore-art { width: 68px; height: 68px; }
 }
 
 /* Pixel-art ore pictures (drawn in ores-art.js). Sized to the text around them. */
 .ore-art { width: 1.25em; height: 1.25em; vertical-align: -0.28em; image-rendering: pixelated; flex: none; }
-.ore-btn .ore-art { width: 80px; height: 80px; vertical-align: middle; display: block; margin: auto; }
-.ore-btn:hover:not(:disabled) .ore-art { filter: brightness(1.12); }
+
+/* ---------- The big ore you tap on the Mine page ----------
+   No box: just the ore itself, gently bobbing over a soft glow in its own color,
+   with little sparkles twinkling around it. The whole square is still tappable. */
+.ore-card .ore-btn,
+.ore-card .ore-btn:hover:not(:disabled),
+.ore-card .ore-btn:active:not(:disabled) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  filter: none;
+  transform: none;
+  outline-offset: 0;
+}
+.ore-btn { overflow: visible; isolation: isolate; }
+.ore-btn > span { position: absolute; pointer-events: none; }
+.ore-btn .ore-bob {
+  inset: 2%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ore-bob 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.37s);
+}
+.ore-btn .ore-art-big {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 0 6px rgba(var(--ore), 0.35));
+  transition: filter 0.15s;
+  transform-origin: 50% 85%;
+}
+.ore-btn:hover .ore-art-big { filter: drop-shadow(0 0 10px rgba(var(--ore), 0.7)) brightness(1.1); }
+/* Soft round light behind the ore that breathes slowly. */
+.ore-btn .ore-glow {
+  inset: 6%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--ore), 0.42), rgba(var(--ore), 0.14) 60%, transparent);
+  animation: ore-glow 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.37s);
+}
+/* Shadow on the ground: smaller when the ore floats up. */
+.ore-btn .ore-shadow {
+  left: 22%;
+  right: 22%;
+  bottom: 1%;
+  height: 9%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
+  animation: ore-shadow 2.6s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.37s);
+}
+@keyframes ore-bob {
+  0%, 100% { transform: translateY(2%); }
+  50%      { transform: translateY(-4%); }
+}
+@keyframes ore-glow {
+  0%, 100% { opacity: 0.65; transform: scale(0.92); }
+  50%      { opacity: 1;    transform: scale(1.04); }
+}
+@keyframes ore-shadow {
+  0%, 100% { transform: scaleX(1);    opacity: 1; }
+  50%      { transform: scaleX(0.78); opacity: 0.6; }
+}
+/* Four-point pixel sparkles that twinkle in turn around the ore. */
+.ore-btn .ore-sparkles { inset: 0; }
+.ore-btn .ore-sparkles i {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 3px rgba(var(--ore), 1));
+  opacity: 0;
+  animation: ore-twinkle 3.2s ease-in-out infinite;
+}
+.ore-btn .ore-sparkles i:nth-child(1) { left: 14%; top: 18%; animation-delay: calc(var(--i, 0) * -0.53s); }
+.ore-btn .ore-sparkles i:nth-child(2) { right: 10%; top: 34%; width: 8px; height: 8px; animation-delay: calc(var(--i, 0) * -0.53s - 1.1s); }
+.ore-btn .ore-sparkles i:nth-child(3) { left: 30%; bottom: 14%; width: 6px; height: 6px; animation-delay: calc(var(--i, 0) * -0.53s - 2.2s); }
+@keyframes ore-twinkle {
+  0%, 60%, 100% { opacity: 0; transform: scale(0.2) rotate(0deg); }
+  72%           { opacity: 1; transform: scale(1.2) rotate(45deg); }
+  84%           { opacity: 0.8; transform: scale(0.7) rotate(90deg); }
+}
+/* Pressing: the ore sinks in right away, then bounces back with a squash and a flash. */
+.ore-btn:active .ore-art-big { transform: scale(0.9, 0.86); }
+.ore-btn.hit .ore-art-big { animation: ore-squash 0.32s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.ore-btn.hit .ore-glow { animation: ore-flash 0.35s ease-out; }
+@keyframes ore-squash {
+  0%   { transform: scale(1.16, 0.82); filter: drop-shadow(0 0 14px rgba(var(--ore), 1)) brightness(1.6); }
+  45%  { transform: scale(0.93, 1.08); filter: drop-shadow(0 0 10px rgba(var(--ore), 0.8)) brightness(1.2); }
+  100% { transform: scale(1, 1); }
+}
+@keyframes ore-flash {
+  0%   { opacity: 1; transform: scale(1.3); background: radial-gradient(closest-side, rgba(255, 255, 255, 0.6), rgba(var(--ore), 0.5) 50%, transparent); }
+  100% { opacity: 0.7; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ore-btn .ore-bob, .ore-btn .ore-glow, .ore-btn .ore-shadow, .ore-btn .ore-sparkles i,
+  .ore-btn.hit .ore-art-big, .ore-btn.hit .ore-glow { animation: none; }
+  .ore-chip-fx { display: none; }
+  .float-num > span { animation: none; }
+}
 
 /* ---------- Battle screen in the forge style ----------
    Stone wall texture over each danger level's colors, pixel frames on the boxes,
@@ -1272,7 +1412,7 @@ body:has(#battle:not([hidden])) .dwarf * { animation-play-state: paused !importa
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none; }
   button.glow { animation: none; }
-  .float-num { animation: float-fade 0.8s linear forwards; }
+  .float-num { animation: float-fade 0.8s linear forwards; transform: translate(-50%, -20px); }
   button, .tab-icon { transition: none; }
 }
 @keyframes float-fade {
