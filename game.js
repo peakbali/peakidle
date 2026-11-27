@@ -994,7 +994,15 @@ function mine(oreId) {
   if (!state.unlocked[oreId]) return;
   state.ore[oreId] += clickAmount(ore);
   sfx("mine", ORES.indexOf(ore));
-  render();
+  // Only refresh the numbers that changed. The whole screen is redrawn 10 times a second
+  // anyway, and redrawing it on every tap made fast tapping laggy on slower phones.
+  const card = refs.ores[oreId];
+  if (card) set(card, "amount", fmt(state.ore[oreId]));
+  const chip = document.querySelector(`#ore-bar [data-ore="${oreId}"]`);
+  if (chip) {
+    set(chip, "n", fmt(state.ore[oreId]));
+    set(chip, "s", fmtShort(state.ore[oreId]));
+  }
 }
 
 function hireMiner(oreId) {
@@ -3108,13 +3116,15 @@ function buildUI() {
             <button data-k="hire">Hire miner (<span data-k="hireCost"></span> 🪙)</button>
           </div>
         </div>`);
-      card.querySelector(".ore-btn").onclick = e => {
+      const oreBtn = card.querySelector(".ore-btn");
+      const hitOre = e => {
+        const spot = oreSpot(oreBtn, e); // measure before anything on the page changes
         const before = state.ore[o.id];
         mine(o.id);
         const got = state.ore[o.id] - before;
-        oreHit(e.currentTarget, o.id, e);
-        if (got > 0) floatText(e.currentTarget, `+${fmtRate(got)}`, o.id);
+        oreHit(oreBtn, o.id, spot, got > 0 ? `+${fmtRate(got)}` : "");
       };
+      oreBtn.onclick = hitOre;
       card.querySelector('[data-k="hire"]').onclick = () => hireMiner(o.id);
       refs.ores[o.id] = card;
       oresBox.appendChild(card);
@@ -3170,55 +3180,62 @@ function buildUI() {
   render();
 }
 
-// The ore squashes and flashes when you hit it.
-function oreHit(btn, oreId, e) {
-  btn.classList.remove("hit");
-  void btn.offsetWidth; // restart the animation
-  btn.classList.add("hit");
-  // A burst of little ore chips flying out from where you tapped (the middle for keyboard).
-  const spot = btn.parentElement;
-  const sh = typeof oreShades === "function" ? oreShades(oreId) : ["#4a2306", "#7a3a10", "#b05a20", "#e07b39", "#f0a070", "#ffe0c0"];
-  const r = btn.getBoundingClientRect();
-  let x = r.width / 2, y = r.height / 2;
+// The ore squashes and flashes when you hit it, little ore chips fly out from where you
+// tapped and a big "+5" in the ore's own colors pops out and floats away.
+// Kept cheap for phones: sizes are read once (oreSpot) before anything on the page changes,
+// the pieces are made without parsing HTML, and old pieces are dropped when you tap fast.
+const FX_CHIPS = 6;     // chips per tap
+const FX_MAX_CHIPS = 24; // at most this many flying at once per ore
+const FX_MAX_POPS = 5;   // at most this many "+N" at once per ore
+// Where the ore is and where you tapped it. Measured before the numbers change, because
+// measuring after a change makes the phone lay out the whole page again first.
+function oreSpot(btn, e) {
+  const g = { bx: btn.offsetLeft, by: btn.offsetTop, bw: btn.offsetWidth, bh: btn.offsetHeight };
+  g.x = g.bw / 2; g.y = g.bh / 2;
   if (e && e.clientX && e.clientY) {
-    x = Math.min(r.width, Math.max(0, e.clientX - r.left));
-    y = Math.min(r.height, Math.max(0, e.clientY - r.top));
+    const r = btn.getBoundingClientRect();
+    g.x = Math.min(g.bw, Math.max(0, e.clientX - r.left));
+    g.y = Math.min(g.bh, Math.max(0, e.clientY - r.top));
   }
-  const n = 7;
-  for (let k = 0; k < n; k++) {
-    const a = (k / n) * Math.PI * 2 + Math.random() * 0.7;
-    const d = 26 + Math.random() * 30;
-    const chip = el(`<span class="ore-chip-fx" aria-hidden="true"></span>`);
-    chip.style.left = `${btn.offsetLeft + x}px`;
-    chip.style.top = `${btn.offsetTop + y}px`;
-    chip.style.setProperty("--dx", `${Math.cos(a) * d}px`);
-    chip.style.setProperty("--dy", `${Math.sin(a) * d - 14}px`);
-    chip.style.setProperty("--c", sh[3 + (k % 3)]);
-    chip.style.setProperty("--o", sh[0]);
-    chip.style.animationDuration = `${0.5 + Math.random() * 0.25}s`;
-    spot.appendChild(chip);
-    chip.addEventListener("animationend", () => chip.remove());
-    setTimeout(() => chip.remove(), 1200);
-  }
+  return g;
 }
+function oreHit(btn, oreId, g, text) {
+  const spot = btn.parentElement;
+  const { bx, by, bw, bh, x, y } = g;
+  // Restart the squash by switching between two copies of the animation, no layout needed.
+  const odd = btn.classList.contains("hit");
+  btn.classList.toggle("hit", !odd);
+  btn.classList.toggle("hit2", odd);
 
-// A big "+5" in the ore's own colors that pops out of the ore you just clicked and floats away.
-function floatText(anchor, text, oreId) {
-  const spot = anchor.parentElement;
-  const sh = typeof oreShades === "function" && oreId ? oreShades(oreId) : null;
-  const pop = el(`<span class="float-num" aria-hidden="true"><span>${text}</span></span>`);
-  pop.style.left = `${anchor.offsetLeft + anchor.offsetWidth / 2 + (Math.random() * 24 - 12)}px`;
-  pop.style.top = `${anchor.offsetTop + anchor.offsetHeight * 0.18}px`;
-  pop.style.setProperty("--drift", `${Math.random() * 30 - 15}px`);
-  pop.style.setProperty("--tilt", `${Math.random() * 16 - 8}deg`);
-  if (sh) {
-    pop.style.setProperty("--fc", sh[4]);
-    pop.style.setProperty("--fm", sh[3]);
-    pop.style.setProperty("--fo", sh[0]);
+  const sh = typeof oreShades === "function" ? oreShades(oreId) : ["#4a2306", "#7a3a10", "#b05a20", "#e07b39", "#f0a070", "#ffe0c0"];
+  const frag = document.createDocumentFragment();
+  for (let k = 0; k < FX_CHIPS; k++) {
+    const a = (k / FX_CHIPS) * Math.PI * 2 + Math.random() * 0.7;
+    const d = 26 + Math.random() * 30;
+    const chip = document.createElement("span");
+    chip.className = k % 2 ? "ore-chip-fx" : "ore-chip-fx sm";
+    chip.style.cssText = `left:${bx + x}px;top:${by + y}px;--dx:${(Math.cos(a) * d).toFixed(1)}px;--dy:${(Math.sin(a) * d - 14).toFixed(1)}px;--c:${sh[3 + (k % 3)]};--o:${sh[0]};animation-duration:${(0.5 + Math.random() * 0.25).toFixed(2)}s`;
+    chip.addEventListener("animationend", () => chip.remove());
+    setTimeout(() => chip.remove(), 1200); // in case animations are switched off
+    frag.appendChild(chip);
   }
-  spot.appendChild(pop);
-  pop.addEventListener("animationend", ev => { if (ev.target === pop) pop.remove(); });
-  setTimeout(() => pop.remove(), 1600); // in case animations are switched off
+  if (text) {
+    const pop = document.createElement("span");
+    pop.className = "float-num";
+    const inner = document.createElement("span");
+    inner.textContent = text;
+    pop.appendChild(inner);
+    pop.style.cssText = `left:${(bx + bw / 2 + (Math.random() * 24 - 12)).toFixed(1)}px;top:${(by + bh * 0.18).toFixed(1)}px;--drift:${(Math.random() * 30 - 15).toFixed(1)}px;--tilt:${(Math.random() * 16 - 8).toFixed(1)}deg;--fc:${sh[4]};--fm:${sh[3]};--fo:${sh[0]}`;
+    pop.addEventListener("animationend", ev => { if (ev.target === pop) pop.remove(); });
+    setTimeout(() => pop.remove(), 1600);
+    frag.appendChild(pop);
+  }
+  spot.appendChild(frag);
+  // Tapping really fast: drop the oldest pieces so the phone never has too many to animate.
+  const chips = spot.getElementsByClassName("ore-chip-fx");
+  while (chips.length > FX_MAX_CHIPS) chips[0].remove();
+  const pops = spot.getElementsByClassName("float-num");
+  while (pops.length > FX_MAX_POPS) pops[0].remove();
 }
 
 // A short glow on buy buttons the moment you can afford them.
