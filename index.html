@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preload" href="fonts/Jersey15.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css?v=58">
+  <link rel="stylesheet" href="style.css?v=64">
 </head>
 <body>
   <!-- Slim top bar like a game HUD: logo, what you own as small chips, and a settings gear. -->
@@ -144,7 +144,9 @@
     <!-- Souls: reincarnate for Souls, spend them on permanent attributes -->
     <section class="panel" id="panel-souls" data-panel="souls">
       <h2>Souls</h2>
-      <details class="hint"><summary>How it works</summary><p>Reincarnate to start a new run and earn <span class="px-slot ti-slot" data-icon="souls"></span> Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again. Learned skills stay learned but go back to level 1.</p></details>
+      <details class="hint"><summary>How it works</summary><p>Reincarnate to start a new run and earn <span class="px-slot ti-slot" data-icon="souls"></span> Souls. Spend Souls on attributes: they add to your hero's stats forever, even after you reincarnate again. Learned skills stay learned but go back to level 1. The Monster Farm costs 2000 Souls once: every monster you have caught lives there (once per element) and makes 1 essence of its element per day.</p></details>
+      <h3>Monster Farm</h3>
+      <div id="farm"></div>
       <h3>Attributes</h3>
       <div id="attributes"></div>
       <h3>Reincarnation</h3>
@@ -209,7 +211,8 @@
   <script src="monster-art.js?v=57"></script>
   <script src="zone-art.js?v=41"></script>
   <script src="dwarves.js?v=53"></script>
-  <script src="game.js?v=63"></script>
+  <script src="farm.js?v=64"></script>
+  <script src="game.js?v=64"></script>
   <script src="info-pop.js?v=43"></script>
   <script src="menu.js?v=44"></script>
   <script src="pwa.js?v=41"></script>

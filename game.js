@@ -531,6 +531,7 @@ function freshState() {
     milestones: {},       // Bestiary milestones reached: id -> when (kept forever, see BESTIARY_REWARDS)
     milestonesNew: [],    // milestones reached but not celebrated yet (the Congratulations window shows them)
     welcomed: false,      // has seen the Welcome window (it opens once by itself, then from the [?] button)
+    farm: freshFarm(),    // Monster Farm (farm.js): bought with Souls, kept forever, its essence waits to be collected
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
@@ -747,6 +748,7 @@ function load() {
     if (typeof saved.welcomed === "boolean") s.welcomed = saved.welcomed;
     checkMilestones(s); // anything already reached (older saves) is added and celebrated once
     s.profile = normalizeProfile(saved.profile);
+    s.farm = normalizeFarm(saved.farm);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
     console.warn("Could not load save", e);
@@ -1709,6 +1711,7 @@ function reincarnate() {
     milestones: state.milestones, // and so do its milestones and their bonus
     milestonesNew: state.milestonesNew,
     welcomed: state.welcomed,
+    farm: state.farm, // the Monster Farm and the essence waiting in it
   };
   state = Object.assign(freshState(), keep);
   sfx("souls");
@@ -2986,6 +2989,7 @@ function renderMerchant() {
 let reincarnateOpen = false; // is the "are you sure?" box showing
 
 function buildSouls() {
+  buildFarm();
   refs.attrs = {};
   const box = document.getElementById("attributes");
   box.innerHTML = "";
@@ -3023,7 +3027,7 @@ function buildSouls() {
       <div class="confirm" data-k="confirm" hidden>
         <div class="name">Are you sure?</div>
         <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, Run Boons, all gear (in your bag and equipped), unspent essences, danger level and waiting monsters.</div>
-        <div class="small"><b>You keep:</b> learned skills (they go back to level 1), skill slots, Element Mastery, Souls and attributes.</div>
+        <div class="small"><b>You keep:</b> learned skills (they go back to level 1), skill slots, Element Mastery, Souls, attributes, the Monster Farm and the essence waiting in it.</div>
         <div class="small"><b>Next run:</b> <span data-k="nextPrices"></span></div>
         <div class="buttons">
           <button class="primary" data-k="yes"></button>
@@ -3038,6 +3042,7 @@ function buildSouls() {
 }
 
 function renderSouls() {
+  renderFarm();
   set(document.getElementById("souls-bar"), "souls", fmt(state.souls));
   set(document.getElementById("settings-pop"), "lives", String(state.reincarnations));
   set(document.getElementById("settings-pop"), "priceMult", runPriceMult().toFixed(2));
@@ -3445,6 +3450,7 @@ function start() {
   }
 
   updateSpawns();
+  farmTick(); // the Monster Farm kept making essence while you were away (no limit)
 
   buildUI();
   if (loadNote) log(loadNote);
@@ -3455,6 +3461,7 @@ function start() {
     const now = performance.now();
     addOre((now - last) / 1000);
     last = now;
+    farmTick();
     updateSpawns();
     render();
   }, 100);
