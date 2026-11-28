@@ -1,26 +1,28 @@
 // ---------- Monster Farm ----------
 // Bought once with Souls in the Souls panel, and kept forever (also when you reincarnate).
-// Every monster you have caught lives here, once per element: a Blazing Rat and a Frozen Rat are
-// two different farm animals, so a full farm holds 40 creatures x 5 elements = 200.
-// Each one makes 1 essence of its own element per day, in real time (also while the game is closed).
-// Catching the same one again doesn't add more. The essence waits in the farm until you tap Collect,
-// so it is safe when you reincarnate.
+// Every monster you have ever caught lives here: catch 5 Frozen Rats and 5 Frozen Rats roam the pen.
+// Essence: each KIND of farm animal (creature + element, e.g. Frozen Rat) makes 1 essence of its element
+// every 3 hours (8 a day), in real time (also while the game is closed). Extra copies don't make more, so the most is
+// 40 creatures x 5 elements = 200 kinds, 40 per element every 3 hours. The essence waits in the farm until
+// you tap Collect, so it is safe when you reincarnate.
 //
-// You can release a farm animal (tap it, then Release twice). It leaves the farm and stops making
-// essence. Your Bestiary and its bonuses don't change, and catching that monster in that element
-// again brings it back.
+// You can release a farm animal (tap it, then Release twice). One copy leaves the farm; if it was the
+// last of its kind, that kind stops making essence. Your Bestiary and its bonuses don't change, and
+// catching it again brings one back.
 //
 // Loaded before game.js. Uses state, ELEMENTS, TIERS, monsterArtHTML ... only when called.
 
 const FARM = {
   price: 2000,              // Souls
-  perDay: 1,                // essence per farm animal per day
+  perDay: 8,                // essence per kind of farm animal per day (1 every 3 hours)
 };
 const FARM_DAY_MS = 24 * 60 * 60 * 1000;
 
 function freshFarm() { return { owned: false, last: 0, stash: {}, released: {} }; }
 
-function normalizeFarm(saved) {
+// released: "creature|element" -> how many copies were let go.
+// bestiary is the loaded Bestiary, so old saves (released = true, "all of them") keep them gone.
+function normalizeFarm(saved, bestiary = {}) {
   const f = freshFarm();
   if (!saved || typeof saved !== "object") return f;
   f.owned = saved.owned === true;
@@ -29,33 +31,47 @@ function normalizeFarm(saved) {
     const n = saved.stash && saved.stash[e.id];
     if (typeof n === "number" && n > 0 && isFinite(n)) f.stash[e.id] = n;
   }
-  for (const [id, v] of Object.entries(saved.released || {})) if (v === true) f.released[id] = true;
+  for (const [id, v] of Object.entries(saved.released || {})) {
+    const [key, el] = id.split("|");
+    const caught = (bestiary[key] && bestiary[key].el && bestiary[key].el[el]) || 0;
+    const n = v === true ? caught : Math.floor(Number(v) || 0);
+    if (n > 0) f.released[id] = Math.min(n, caught);
+  }
   return f;
 }
 
-// Every caught creature + element pair: [{ key, tier, idx, name, element }].
-function farmAnimals() {
+// Every kind of farm animal (creature + element) with how many live here:
+// [{ key, tier, idx, name, element, count }].
+function farmKinds() {
   const out = [];
   for (const c of bestiaryList()) {
     const entry = state.bestiary[c.key];
     if (!entry || !entry.el) continue;
-    for (const e of ELEMENTS) if (entry.el[e.id] > 0 && !farmReleased(`${c.key}|${e.id}`)) out.push({ ...c, element: e.id });
+    for (const e of ELEMENTS) {
+      const count = (entry.el[e.id] || 0) - farmReleased(`${c.key}|${e.id}`);
+      if (count > 0) out.push({ ...c, element: e.id, count });
+    }
   }
   return out;
 }
 
-function farmReleased(id) { return !!(state.farm && state.farm.released && state.farm.released[id]); }
-
-// Catching a monster again in the same element brings a released one back home (called by recordCatch).
-function farmWelcomeBack(key, element) {
-  if (state.farm && state.farm.released) delete state.farm.released[`${key}|${element}`];
+// One entry per animal in the pen (copies included), each with its own copy number n.
+function farmAnimals() {
+  const out = [];
+  for (const k of farmKinds()) for (let n = 0; n < k.count; n++) out.push({ ...k, n });
+  return out;
 }
 
-// Essence per day for each element: { fire: 12, ice: 3, ... }.
+function farmReleased(id) { return (state.farm && state.farm.released && state.farm.released[id]) || 0; }
+
+// Kept so recordCatch can tell the farm about a catch: a new catch adds a copy all by itself.
+function farmWelcomeBack() {}
+
+// Essence per day for each element: { fire: 12, ice: 3, ... }. One per kind, copies don't add.
 function farmRates() {
   const r = {};
   for (const e of ELEMENTS) r[e.id] = 0;
-  for (const a of farmAnimals()) r[a.element] += FARM.perDay;
+  for (const k of farmKinds()) r[k.element] += FARM.perDay;
   return r;
 }
 
@@ -78,8 +94,8 @@ function farmTick(now = Date.now()) {
 // A short string that changes whenever a new creature + element is caught.
 function farmSignature() {
   let s = "";
-  for (const [k, v] of Object.entries(state.bestiary || {})) if (v && v.el) s += k + Object.keys(v.el).join("") + ";";
-  return s + "|" + Object.keys((state.farm && state.farm.released) || {}).join(",");
+  for (const [k, v] of Object.entries(state.bestiary || {})) if (v && v.el) s += k + JSON.stringify(v.el) + ";";
+  return s + "|" + JSON.stringify((state.farm && state.farm.released) || {});
 }
 
 function buyFarm() {
@@ -112,11 +128,11 @@ function collectFarm() {
 
 // ---------- The farm scene ----------
 // A grassy pen where every farm animal is a tiny sprite that wanders, idles, nibbles grass,
-// naps or hops. All the moving is CSS (transform and opacity only), so 200 of them stay smooth.
-// JS only picks a new thing to do for a few animals now and then, and only while the pen is on screen.
+// naps or hops. The whole herd is drawn on one canvas (about 30 times a second, only while the pen
+// is on screen), so even hundreds of animals stay smooth on a phone.
 
 const FARM_FLYERS = new Set(["float", "flap", "pulse"]); // these creatures hover instead of walking
-const farmView = { pen: null, critters: [], sig: "", W: 0, H: 0, size: 24, visible: false, timer: null };
+const farmView = { pen: null, canvas: null, ctx: null, critters: [], sig: "", W: 0, H: 0, size: 24, dpr: 1, visible: false, raf: 0 };
 
 // The picture layers of a monster (body with closed eyes, open eyes), reused from the Bestiary art.
 function farmSpriteLayers(a) {
@@ -127,10 +143,12 @@ function farmSpriteLayers(a) {
 }
 
 // Sprite size and pen height: the more animals, the smaller they get, so all fit at once.
+// With hundreds they crowd together more (they're farm animals, they don't mind).
 function farmLayout(n, width) {
-  const size = n <= 20 ? 34 : n <= 60 ? 28 : n <= 120 ? 24 : 21;
-  const area = Math.max(1, n) * size * size * 2.4;
-  const H = Math.round(Math.min(720, Math.max(170, area / Math.max(200, width))));
+  const size = n <= 20 ? 34 : n <= 60 ? 28 : n <= 120 ? 24 : n <= 250 ? 21 : n <= 500 ? 18 : 16;
+  const room = n <= 250 ? 2.4 : n <= 500 ? 1.8 : 1.3;
+  const area = Math.max(1, n) * size * size * room;
+  const H = Math.round(Math.min(n <= 250 ? 720 : 960, Math.max(170, area / Math.max(200, width))));
   return { size, H };
 }
 
@@ -168,7 +186,7 @@ function buildFarm() {
   box.innerHTML = "";
   refs.farm = el(`
     <div class="card farm-card">
-      <div class="farm-pen" data-k="pen"><div class="fm-empty small" data-k="empty"></div></div>
+      <div class="farm-pen" data-k="pen"><canvas class="fm-canvas"></canvas><div class="fm-empty small" data-k="empty"></div></div>
       <div class="farm-pick" data-k="pick" hidden>
         <span class="fm-pick-name" data-k="pickName"></span>
         <span class="buttons">
@@ -177,13 +195,11 @@ function buildFarm() {
         </span>
       </div>
       <div class="farm-info">
-        <div class="small" data-k="count"></div>
         <div class="farm-buy" data-k="buyBox">
-          <div class="small">Buy the farm once and keep it forever. Each monster you've caught, in each element, makes <b>1 essence of its element per day</b>, even while the game is closed.</div>
           <div class="buttons"><button class="primary" data-k="buy"></button></div>
         </div>
         <div class="farm-made" data-k="madeBox">
-          <div class="small">Makes per day:</div>
+          <div class="small">Makes every 3 hours:</div>
           <div class="drops farm-rates" data-k="rates"></div>
           <div class="small">Waiting to collect: <span data-k="next"></span></div>
           <div class="drops farm-stash" data-k="stash"></div>
@@ -193,7 +209,7 @@ function buildFarm() {
     </div>`);
   refs.farmRates = {}; refs.farmStash = {};
   for (const e of ELEMENTS) {
-    const r = el(`<div class="drop el-${e.id}" title="${e.drop} made per day">${e.icon} <span class="num" data-k="n"></span></div>`);
+    const r = el(`<div class="drop el-${e.id}" title="${e.drop} made every 3 hours">${e.icon} <span class="num" data-k="n"></span></div>`);
     const s = el(`<div class="drop el-${e.id}" title="${e.drop} waiting in the farm">${e.icon} <span class="num" data-k="n"></span></div>`);
     refs.farmRates[e.id] = r; refs.farmStash[e.id] = s;
     refs.farm.querySelector('[data-k="rates"]').appendChild(r);
@@ -208,22 +224,24 @@ function buildFarm() {
   const pen = refs.farm.querySelector('[data-k="pen"]');
   pen.insertAdjacentHTML("afterbegin", farmDecorHTML());
   pen.style.backgroundImage = `url("${FARM_GRASS_TILE}")`;
-  pen.addEventListener("click", e => {
-    const c = e.target.closest(".fm-c");
-    if (c) farmPet(farmView.critters[+c.dataset.i]);
-  });
   farmView.pen = pen;
+  farmView.canvas = pen.querySelector(".fm-canvas");
+  farmView.ctx = farmView.canvas.getContext("2d");
   farmView.sig = "";
   farmView.critters = [];
+  farmView.canvas.addEventListener("click", e => {
+    const r = farmView.canvas.getBoundingClientRect();
+    farmPet(farmHit(e.clientX - r.left, e.clientY - r.top));
+  });
   if (typeof IntersectionObserver === "function") {
-    new IntersectionObserver(es => { farmView.visible = es.some(x => x.isIntersecting); }).observe(pen);
+    new IntersectionObserver(es => { farmView.visible = es.some(x => x.isIntersecting); if (farmView.visible) farmKick(); }).observe(pen);
   } else farmView.visible = true;
   if (typeof ResizeObserver === "function") new ResizeObserver(() => farmResize()).observe(pen);
-  if (!farmView.timer) farmView.timer = setInterval(farmStep, 400);
   farmFill();
+  farmKick();
 }
 
-// (Re)build the animals when a new one is caught.
+// (Re)build the herd when something is caught or released. Animals that were already here keep their spot.
 function farmFill() {
   const pen = farmView.pen;
   if (!pen) return;
@@ -231,122 +249,231 @@ function farmFill() {
   if (sig === farmView.sig) return;
   farmView.sig = sig;
   const animals = farmAnimals();
-  const old = new Map(farmView.critters.map(c => [c.id, c]));
-  pen.querySelectorAll(".fm-c").forEach(n => n.remove());
+  // Animals already here keep their spot (matched by kind: the first Frozen Rat stays the first).
+  const byKind = {};
+  for (const c of farmView.critters) if (!c.leaving) (byKind[c.kind] = byKind[c.kind] || []).push(c);
+  const leaving = farmView.critters.filter(c => c.leaving);
   if (farmPicked) farmSelect(null);
-  const width = pen.clientWidth || 300;
-  const { size, H } = farmLayout(animals.length, width);
-  farmView.size = size;
-  pen.style.height = H + "px";
-  pen.style.setProperty("--fm-size", size + "px");
-  farmView.W = width; farmView.H = H;
-  farmView.critters = animals.map((a, i) => {
-    const id = `${a.key}|${a.element}`;
-    const prev = old.get(id);
-    const layers = farmSpriteLayers(a);
+  const now = performance.now();
+  farmView.critters = animals.map(a => {
+    const id = `${a.key}|${a.element}|${a.n}`;
+    const prev = (byKind[`${a.key}|${a.element}`] || []).shift();
+    if (prev) return prev;
     const anim = (MONSTER_ART[a.key] || {}).anim || "breathe";
-    const node = document.createElement("div");
-    node.className = "fm-c";
-    node.dataset.i = i;
-    node.title = `${ELEMENT_ADJECTIVE[a.element]} ${a.name}`;
-    node.innerHTML = `<span class="fm-sh"></span><span class="fm-f"><span class="fm-a">` +
-      `<img class="fm-l" src="${layers.body}" alt="" draggable="false">` +
-      (layers.eye ? `<img class="fm-l fm-eye" src="${layers.eye}" alt="" draggable="false" style="animation-delay:${-((i * 1.37) % 6).toFixed(2)}s">` : "") +
-      `</span></span><span class="fm-z">z</span>`;
-    const c = prev ? { ...prev, node, i } : {
-      id, node, i, name: node.title, fly: FARM_FLYERS.has(anim),
-      x: Math.random(), y: Math.random(), face: Math.random() < 0.5 ? 1 : -1, until: 0, state: "idle",
+    const x = Math.random(), y = Math.random();
+    return {
+      id, kind: `${a.key}|${a.element}`, element: a.element, name: `${ELEMENT_ADJECTIVE[a.element]} ${a.name}`,
+      pics: farmPics(a), fly: FARM_FLYERS.has(anim), face: Math.random() < 0.5 ? 1 : -1,
+      x, y, fx: x, fy: y, t0: 0, t1: 0, state: "idle", since: now, until: now + Math.random() * 6000,
+      blink: Math.random() * 6000, alpha: 1,
     };
-    node.querySelector(".fm-a").style.animationDelay = `${-((i * 0.53) % 3).toFixed(2)}s`;
-    pen.appendChild(node);
-    farmPlace(c, 0);
-    farmSetState(c, c.state === "walk" ? "idle" : c.state);
-    c.until = performance.now() + 500 + Math.random() * 6000;
-    return c;
   });
+  // keep animals that are still running out of the pen until they're gone
+  farmView.critters.push(...leaving);
+  farmResize(true);
 }
 
-function farmResize() {
+function farmResize(force) {
   const pen = farmView.pen;
-  if (!pen || !pen.clientWidth || pen.clientWidth === farmView.W) return;
-  const { size, H } = farmLayout(farmView.critters.length, pen.clientWidth);
-  farmView.W = pen.clientWidth; farmView.H = H; farmView.size = size;
+  if (!pen) return;
+  const width = pen.clientWidth;
+  if (!width || (!force && width === farmView.W)) return;
+  const n = farmView.critters.filter(c => !c.leaving).length;
+  const { size, H } = farmLayout(n, width);
+  farmView.W = width; farmView.H = H; farmView.size = size;
   pen.style.height = H + "px";
-  pen.style.setProperty("--fm-size", size + "px");
-  for (const c of farmView.critters) farmPlace(c, 0);
+  const dpr = Math.min(2, window.devicePixelRatio || 1); // sharper than this costs a lot and looks the same
+  const cv = farmView.canvas;
+  cv.width = Math.round(width * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = width + "px"; cv.style.height = H + "px";
+  farmView.dpr = dpr;
+  farmKick();
 }
 
-// Put an animal at its spot (x, y are 0..1 of the free area). Moving takes `secs` seconds.
-function farmPlace(c, secs) {
+// Pictures (body with closed eyes, open eyes) for a creature + element, made once and shared by copies.
+const farmPicCache = {};
+function farmPics(a) {
+  const k = `${a.key}|${a.element}`;
+  if (!farmPicCache[k]) {
+    const l = farmSpriteLayers(a);
+    const load = src => { if (!src) return null; const im = new Image(); im.src = src; return im; };
+    farmPicCache[k] = { body: load(l.body), eye: load(l.eye) };
+  }
+  return farmPicCache[k];
+}
+
+// Where an animal stands right now (top-left of its picture, in CSS pixels).
+function farmPos(c, now) {
+  let x = c.x, y = c.y;
+  if (now < c.t1) {
+    const t = Math.max(0, (now - c.t0) / (c.t1 - c.t0));
+    x = c.fx + (c.x - c.fx) * t; y = c.fy + (c.y - c.fy) * t;
+  }
   const s = farmView.size;
-  const px = c.x * Math.max(0, farmView.W - s), py = 6 + c.y * Math.max(0, farmView.H - s - 10);
-  c.node.style.transitionDuration = secs + "s";
-  c.node.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0)`;
-  c.node.style.zIndex = String(10 + Math.round(py));
-  c.node.classList.toggle("fm-left", c.face < 0);
+  return { px: x * (farmView.W - s), py: 6 + y * (farmView.H - s - 10), sy: y };
 }
 
-function farmSetState(c, st) {
-  if (c.state === st && c.node.classList.contains("s-" + st)) return;
-  c.node.classList.remove("s-" + c.state);
+// Soft oval shadows, drawn once and stamped under every animal (much cheaper than drawing ovals).
+let farmShadowCache = null;
+function farmShadows() {
+  if (farmShadowCache) return farmShadowCache;
+  const make = color => {
+    const cv = document.createElement("canvas");
+    cv.width = 32; cv.height = 10;
+    const x = cv.getContext("2d");
+    x.fillStyle = color;
+    x.beginPath(); x.ellipse(16, 5, 16, 5, 0, 0, Math.PI * 2); x.fill();
+    return cv;
+  };
+  return (farmShadowCache = { dark: make("rgba(0,0,0,0.28)"), light: make("rgba(0,0,0,0.17)"), picked: make("rgba(255,210,110,0.85)") });
+}
+
+// Draw the whole herd. Runs about 30 times a second, only while the pen is on screen.
+function farmDraw(now) {
+  const { ctx, dpr, size: s } = farmView;
+  const cv = farmView.canvas;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const list = farmView.critters;
+  for (const c of list) { const p = farmPos(c, now); c.px = p.px; c.py = p.py; }
+  list.sort((a, b) => a.py - b.py);
+  ctx.font = `${Math.round(s * 0.5)}px "Jersey 15", monospace`;
+  const shadows = farmShadows();
+  for (const c of list) {
+    if (!c.pics.body.complete) continue;
+    const t = now - c.since;
+    let dy = 0, sx = 1, sy = 1, rot = 0, eyes = true;
+    const flying = c.fly && c.state !== "sleep";
+    if (c.state === "walk") {
+      dy = flying ? -Math.sin(now / 250 + c.blink) * s * 0.1 : (Math.floor(now / 210 + c.blink) % 2) * -s * 0.09;
+      rot = flying ? 0 : (Math.floor(now / 210 + c.blink) % 2 ? 0.05 : -0.05);
+    } else if (c.state === "hop") {
+      const k = (t % 600) / 600;
+      dy = -Math.sin(Math.PI * k) * s * 0.45;
+      if (k < 0.12 || k > 0.88) { sx = 1.1; sy = 0.88; }
+    } else if (c.state === "eat") {
+      const k = (t % 1100) / 1100;
+      if (k > 0.6) rot = 0.2;
+    } else if (c.state === "sleep") {
+      sx = 1.06; sy = 0.82 + Math.sin(now / 600 + c.blink) * 0.03; eyes = false;
+    } else {
+      sy = 1 - (Math.sin(now / 420 + c.blink) + 1) * 0.02; // breathing
+    }
+    if (eyes && (now + c.blink) % 6000 < 130) eyes = false; // blink
+    const lift = flying ? -s * 0.28 : 0;
+    const cx = c.px + s / 2, base = c.py + s;
+    ctx.globalAlpha = c.alpha;
+    // shadow
+    const sw = s * (flying ? 0.44 : 0.64), sh = s * 0.18;
+    ctx.drawImage(c === farmPicked ? shadows.picked : flying ? shadows.light : shadows.dark, cx - sw / 2, base - s * 0.04 - sh / 2, sw, sh);
+    // the animal itself: move to its feet, then tilt / squash / flip there
+    const cos = rot ? Math.cos(rot * c.face) : 1, sin = rot ? Math.sin(rot * c.face) : 0;
+    const a = sx * c.face;
+    ctx.setTransform(dpr * cos * a, dpr * sin * a, -dpr * sin * sy, dpr * cos * sy, dpr * cx, dpr * (base + lift + dy));
+    ctx.drawImage(c.pics.body, -s / 2, -s, s, s);
+    if (eyes && c.pics.eye && c.pics.eye.complete) ctx.drawImage(c.pics.eye, -s / 2, -s, s, s);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (c.state === "eat" && !flying && (t % 1100) / 1100 > 0.6) {
+      ctx.fillStyle = "#9ccf6a";
+      const ex = cx + c.face * s * 0.42;
+      ctx.fillRect(ex, base - 3, 2, 2); ctx.fillRect(ex - c.face * 4, base - 5, 2, 2);
+    }
+    if (c.state === "sleep") {
+      const k = ((now + c.blink) % 2400) / 2400;
+      ctx.globalAlpha = c.alpha * Math.min(1, (1 - k) * 2);
+      ctx.fillStyle = "#e8f0ff";
+      ctx.fillText("z", cx + s * 0.35 + k * 6, c.py + s * 0.15 - k * 10);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Start the draw loop if it isn't running. It stops by itself when the pen is off screen.
+function farmKick() {
+  if (farmView.raf || !farmView.ctx) return;
+  let last = 0;
+  const loop = now => {
+    if (!farmView.visible || document.hidden || !farmView.pen || !farmView.pen.isConnected) { farmView.raf = 0; return; }
+    farmView.raf = requestAnimationFrame(loop);
+    const gap = farmView.critters.length > 300 ? 50 : 33; // 30 frames a second (20 for big herds) is plenty for tiny pixel animals
+    if (now - last < gap) return;
+    last = now;
+    for (const c of farmView.critters) if (now >= c.until) farmChoose(c, now);
+    farmDraw(now);
+  };
+  farmView.raf = requestAnimationFrame(loop);
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) farmKick(); });
+
+function farmSetState(c, st, now) {
   c.state = st;
-  c.node.classList.add("s-" + st);
-  c.node.classList.toggle("fm-fly", c.fly && st !== "sleep");
+  c.since = now;
 }
 
 // What to do next: mostly wander and chill, sometimes nibble grass, nap or do a happy hop.
 function farmChoose(c, now) {
+  if (c.leaving) { farmView.critters = farmView.critters.filter(x => x !== c); return; }
   const r = Math.random();
   if (c.state === "sleep" && r < 0.5) { c.until = now + 4000 + Math.random() * 6000; return; } // keep napping
   if (r < 0.42) {
-    // Walk to a spot not too far away.
     const nx = Math.min(1, Math.max(0, c.x + (Math.random() - 0.5) * 0.6));
     const ny = Math.min(1, Math.max(0, c.y + (Math.random() - 0.5) * 0.6));
-    const dist = Math.hypot((nx - c.x) * farmView.W, (ny - c.y) * farmView.H);
-    if (Math.abs(nx - c.x) > 0.01) c.face = nx > c.x ? 1 : -1;
-    c.x = nx; c.y = ny;
-    const secs = Math.max(1.2, dist / (c.fly ? 16 : 11));
-    farmSetState(c, "walk");
-    farmPlace(c, secs);
-    c.until = now + secs * 1000 + 200;
+    farmWalk(c, nx, ny, now, c.fly ? 16 : 11);
   } else if (r < 0.66) {
-    farmSetState(c, c.fly ? "idle" : "eat");
+    farmSetState(c, c.fly ? "idle" : "eat", now);
     c.until = now + 3000 + Math.random() * 5000;
   } else if (r < 0.76) {
-    farmSetState(c, "sleep");
+    farmSetState(c, "sleep", now);
     c.until = now + 6000 + Math.random() * 9000;
   } else if (r < 0.82) {
-    farmSetState(c, "hop");
-    c.until = now + 1300;
+    farmSetState(c, "hop", now);
+    c.until = now + 1200;
   } else if (r < 0.88) {
     c.face = -c.face; // look around
-    farmSetState(c, "idle");
-    farmPlace(c, 0);
+    farmSetState(c, "idle", now);
     c.until = now + 1500 + Math.random() * 2500;
   } else {
-    farmSetState(c, "idle");
+    farmSetState(c, "idle", now);
     c.until = now + 2000 + Math.random() * 5000;
   }
 }
 
-function farmStep() {
-  if (!farmView.visible || document.hidden || !farmView.pen) return;
-  const now = performance.now();
-  for (const c of farmView.critters) if (now >= c.until) farmChoose(c, now);
+function farmWalk(c, nx, ny, now, speed) {
+  const p = farmPos(c, now), s = farmView.size;
+  c.fx = p.px / Math.max(1, farmView.W - s); c.fy = (p.py - 6) / Math.max(1, farmView.H - s - 10);
+  const dist = Math.hypot((nx - c.fx) * farmView.W, (ny - c.fy) * farmView.H);
+  if (Math.abs(nx - c.fx) > 0.01) c.face = nx > c.fx ? 1 : -1;
+  c.x = nx; c.y = ny;
+  const ms = Math.max(1200, dist / speed * 1000);
+  c.t0 = now; c.t1 = now + ms;
+  farmSetState(c, "walk", now);
+  c.until = c.t1 + 200;
+}
+
+// Which animal is under a tap (the one drawn on top wins).
+function farmHit(x, y) {
+  const s = farmView.size, list = farmView.critters;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const c = list[i];
+    if (c.leaving || c.px === undefined) continue;
+    const top = c.py - (c.fly ? s * 0.28 : 0);
+    if (x >= c.px - 3 && x <= c.px + s + 3 && y >= top - 3 && y <= top + s + 3) return c;
+  }
+  return null;
 }
 
 // The animal picked by a tap (shown in the bar under the pen, with Release).
 let farmPicked = null, farmReleaseArmed = false;
 function farmSelect(c) {
-  if (farmPicked && farmPicked.node) farmPicked.node.classList.remove("fm-picked");
   farmPicked = c;
   farmReleaseArmed = false;
   const bar = refs.farm && refs.farm.querySelector('[data-k="pick"]');
   if (!bar) return;
   bar.hidden = !c;
   if (!c) return;
-  c.node.classList.add("fm-picked");
-  setIconHTML(bar.querySelector('[data-k="pickName"]'), `${elementById[c.id.split("|")[1]].icon} <b>${escapeHtml(c.name)}</b>`);
+  setIconHTML(bar.querySelector('[data-k="pickName"]'), `${elementById[c.element].icon} <b>${escapeHtml(c.name)}</b>`);
   setIconText(bar.querySelector('[data-k="release"]'), "Release");
 }
 
@@ -360,34 +487,35 @@ function farmReleaseTap() {
     return;
   }
   farmTick(); // count what it made up to now
-  state.farm.released[c.id] = true;
+  state.farm.released[c.kind] = farmReleased(c.kind) + 1;
   farmSelect(null);
-  log(`You released the ${c.name}. Bye bye! Catch it again to bring it back to the farm.`);
-  // Run off the nearest side, then rebuild the herd.
-  c.face = c.x < 0.5 ? -1 : 1;
-  c.x = c.x < 0.5 ? -0.25 : 1.25;
-  farmSetState(c, "walk");
-  c.until = Infinity;
-  farmPlace(c, 1.4);
-  c.node.classList.add("fm-leaving");
-  setTimeout(() => { save(); render(); }, 1400);
+  log(`You released a ${c.name}. Bye bye! Catch it again to bring it back to the farm.`);
+  const now = performance.now();
+  c.leaving = true;
+  farmWalk(c, c.x < 0.5 ? -0.3 : 1.3, c.y, now, 60);
+  c.t1 = now + 1400; c.until = c.t1;
+  const fade = () => { c.alpha = Math.max(0, 1 - (performance.now() - now) / 1400); if (c.alpha > 0) requestAnimationFrame(fade); };
+  requestAnimationFrame(fade);
+  save();
+  render();
 }
 
 // Tap an animal: it hops and says its name.
 function farmPet(c) {
   if (!c) return;
   farmSelect(c);
-  farmSetState(c, "hop");
-  c.until = performance.now() + 1300;
+  const now = performance.now();
+  farmSetState(c, "hop", now);
+  c.t1 = 0; c.fx = c.x = c.px / Math.max(1, farmView.W - farmView.size); c.fy = c.y = (c.py - 6) / Math.max(1, farmView.H - farmView.size - 10);
+  c.until = now + 1200;
   const old = farmView.pen.querySelector(".fm-tag");
   if (old) old.remove();
   const tag = document.createElement("div");
   tag.className = "fm-tag";
-  tag.innerHTML = emo(`${elementById[c.id.split("|")[1]].icon} ${escapeHtml(c.name)}`);
+  tag.innerHTML = emo(`${elementById[c.element].icon} ${escapeHtml(c.name)}`);
   const s = farmView.size;
-  const px = c.x * Math.max(0, farmView.W - s) + s / 2, py = 6 + c.y * Math.max(0, farmView.H - s - 10);
-  tag.style.left = Math.min(farmView.W - 60, Math.max(60, px)) + "px";
-  tag.style.top = Math.max(0, py - 22) + "px";
+  tag.style.left = Math.min(farmView.W - 60, Math.max(60, c.px + s / 2)) + "px";
+  tag.style.top = Math.max(0, c.py - 22) + "px";
   farmView.pen.appendChild(tag);
   setTimeout(() => tag.remove(), 1800);
 }
@@ -405,8 +533,6 @@ function renderFarm() {
   farmFill();
   const f = state.farm;
   const animals = farmView.critters.length;
-  const full = bestiaryList().length * ELEMENTS.length;
-  set(card, "count", `${animals} of ${full} monsters live here (every monster, once per element).`);
   set(card, "empty", animals ? "" : "Catch monsters in Adventure and they move in here.");
   card.querySelector('[data-k="empty"]').hidden = animals > 0;
   card.querySelector('[data-k="buyBox"]').hidden = f.owned;
@@ -422,7 +548,7 @@ function renderFarm() {
   let any = false, soonest = Infinity;
   for (const e of ELEMENTS) {
     const have = f.stash[e.id] || 0;
-    set(refs.farmRates[e.id], "n", fmt(rates[e.id]));
+    set(refs.farmRates[e.id], "n", fmt(rates[e.id] / 8));
     set(refs.farmStash[e.id], "n", fmt(have));
     refs.farmRates[e.id].classList.toggle("dim", !rates[e.id]);
     refs.farmStash[e.id].classList.toggle("dim", have < 1);

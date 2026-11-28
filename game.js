@@ -748,7 +748,7 @@ function load() {
     if (typeof saved.welcomed === "boolean") s.welcomed = saved.welcomed;
     checkMilestones(s); // anything already reached (older saves) is added and celebrated once
     s.profile = normalizeProfile(saved.profile);
-    s.farm = normalizeFarm(saved.farm);
+    s.farm = normalizeFarm(saved.farm, s.bestiary);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
     console.warn("Could not load save", e);
