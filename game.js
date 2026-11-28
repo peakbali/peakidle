@@ -964,6 +964,7 @@ function recordCatch(m) {
   e.caught += 1;
   e.el[m.element] = (e.el[m.element] || 0) + 1;
   if (!e.first) e.first = Date.now();
+  farmWelcomeBack(bestiaryKeyOf(m), m.element); // a released farm animal comes home
   checkMilestones(state);
 }
 

@@ -2327,3 +2327,9 @@ body.in-battle #panel-adventure * { animation-play-state: paused !important; }
 .farm-card .drop.dim { opacity: 0.4; }
 .farm-rates, .farm-stash { margin: 4px 0 8px; }
 @media (prefers-reduced-motion: reduce) { .fm-c { transition-duration: 0s !important; } }
+
+/* Monster Farm: the tapped animal and its Release bar */
+.fm-picked .fm-sh { background: rgba(255, 210, 110, 0.75); box-shadow: 0 0 0 1px #000; }
+.fm-leaving { opacity: 0; transition-property: transform, opacity !important; }
+.farm-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: -4px 2px 8px; }
+.farm-pick .buttons { margin: 0; }

@@ -6,6 +6,10 @@
 // Catching the same one again doesn't add more. The essence waits in the farm until you tap Collect,
 // so it is safe when you reincarnate.
 //
+// You can release a farm animal (tap it, then Release twice). It leaves the farm and stops making
+// essence. Your Bestiary and its bonuses don't change, and catching that monster in that element
+// again brings it back.
+//
 // Loaded before game.js. Uses state, ELEMENTS, TIERS, monsterArtHTML ... only when called.
 
 const FARM = {
@@ -14,7 +18,7 @@ const FARM = {
 };
 const FARM_DAY_MS = 24 * 60 * 60 * 1000;
 
-function freshFarm() { return { owned: false, last: 0, stash: {} }; }
+function freshFarm() { return { owned: false, last: 0, stash: {}, released: {} }; }
 
 function normalizeFarm(saved) {
   const f = freshFarm();
@@ -25,6 +29,7 @@ function normalizeFarm(saved) {
     const n = saved.stash && saved.stash[e.id];
     if (typeof n === "number" && n > 0 && isFinite(n)) f.stash[e.id] = n;
   }
+  for (const [id, v] of Object.entries(saved.released || {})) if (v === true) f.released[id] = true;
   return f;
 }
 
@@ -34,9 +39,16 @@ function farmAnimals() {
   for (const c of bestiaryList()) {
     const entry = state.bestiary[c.key];
     if (!entry || !entry.el) continue;
-    for (const e of ELEMENTS) if (entry.el[e.id] > 0) out.push({ ...c, element: e.id });
+    for (const e of ELEMENTS) if (entry.el[e.id] > 0 && !farmReleased(`${c.key}|${e.id}`)) out.push({ ...c, element: e.id });
   }
   return out;
+}
+
+function farmReleased(id) { return !!(state.farm && state.farm.released && state.farm.released[id]); }
+
+// Catching a monster again in the same element brings a released one back home (called by recordCatch).
+function farmWelcomeBack(key, element) {
+  if (state.farm && state.farm.released) delete state.farm.released[`${key}|${element}`];
 }
 
 // Essence per day for each element: { fire: 12, ice: 3, ... }.
@@ -67,7 +79,7 @@ function farmTick(now = Date.now()) {
 function farmSignature() {
   let s = "";
   for (const [k, v] of Object.entries(state.bestiary || {})) if (v && v.el) s += k + Object.keys(v.el).join("") + ";";
-  return s;
+  return s + "|" + Object.keys((state.farm && state.farm.released) || {}).join(",");
 }
 
 function buyFarm() {
@@ -157,6 +169,13 @@ function buildFarm() {
   refs.farm = el(`
     <div class="card farm-card">
       <div class="farm-pen" data-k="pen"><div class="fm-empty small" data-k="empty"></div></div>
+      <div class="farm-pick" data-k="pick" hidden>
+        <span class="fm-pick-name" data-k="pickName"></span>
+        <span class="buttons">
+          <button class="danger" data-k="release">Release</button>
+          <button data-k="pickClose">Close</button>
+        </span>
+      </div>
       <div class="farm-info">
         <div class="small" data-k="count"></div>
         <div class="farm-buy" data-k="buyBox">
@@ -182,6 +201,8 @@ function buildFarm() {
   }
   refs.farm.querySelector('[data-k="buy"]').onclick = buyFarm;
   refs.farm.querySelector('[data-k="collect"]').onclick = collectFarm;
+  refs.farm.querySelector('[data-k="release"]').onclick = farmReleaseTap;
+  refs.farm.querySelector('[data-k="pickClose"]').onclick = () => farmSelect(null);
   box.appendChild(refs.farm);
 
   const pen = refs.farm.querySelector('[data-k="pen"]');
@@ -212,6 +233,7 @@ function farmFill() {
   const animals = farmAnimals();
   const old = new Map(farmView.critters.map(c => [c.id, c]));
   pen.querySelectorAll(".fm-c").forEach(n => n.remove());
+  if (farmPicked) farmSelect(null);
   const width = pen.clientWidth || 300;
   const { size, H } = farmLayout(animals.length, width);
   farmView.size = size;
@@ -313,9 +335,48 @@ function farmStep() {
   for (const c of farmView.critters) if (now >= c.until) farmChoose(c, now);
 }
 
+// The animal picked by a tap (shown in the bar under the pen, with Release).
+let farmPicked = null, farmReleaseArmed = false;
+function farmSelect(c) {
+  if (farmPicked && farmPicked.node) farmPicked.node.classList.remove("fm-picked");
+  farmPicked = c;
+  farmReleaseArmed = false;
+  const bar = refs.farm && refs.farm.querySelector('[data-k="pick"]');
+  if (!bar) return;
+  bar.hidden = !c;
+  if (!c) return;
+  c.node.classList.add("fm-picked");
+  setIconHTML(bar.querySelector('[data-k="pickName"]'), `${elementById[c.id.split("|")[1]].icon} <b>${escapeHtml(c.name)}</b>`);
+  setIconText(bar.querySelector('[data-k="release"]'), "Release");
+}
+
+// First tap asks, second tap lets it go: it runs out of the pen and is gone.
+function farmReleaseTap() {
+  const c = farmPicked;
+  if (!c) return;
+  if (!farmReleaseArmed) {
+    farmReleaseArmed = true;
+    setIconText(refs.farm.querySelector('[data-k="release"]'), "Tap again to release");
+    return;
+  }
+  farmTick(); // count what it made up to now
+  state.farm.released[c.id] = true;
+  farmSelect(null);
+  log(`You released the ${c.name}. Bye bye! Catch it again to bring it back to the farm.`);
+  // Run off the nearest side, then rebuild the herd.
+  c.face = c.x < 0.5 ? -1 : 1;
+  c.x = c.x < 0.5 ? -0.25 : 1.25;
+  farmSetState(c, "walk");
+  c.until = Infinity;
+  farmPlace(c, 1.4);
+  c.node.classList.add("fm-leaving");
+  setTimeout(() => { save(); render(); }, 1400);
+}
+
 // Tap an animal: it hops and says its name.
 function farmPet(c) {
   if (!c) return;
+  farmSelect(c);
   farmSetState(c, "hop");
   c.until = performance.now() + 1300;
   const old = farmView.pen.querySelector(".fm-tag");
