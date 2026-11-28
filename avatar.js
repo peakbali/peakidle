@@ -3,7 +3,8 @@
 // The look is shown in the settings menu, the Hero panel and on the battle screen.
 // Purely for looks: it never changes stats.
 //
-// The drawing is a 24 x 32 pixel grid of a hero standing and facing you.
+// The drawing is a 24 x 32 pixel grid of a hero standing and facing you. To match the monsters'
+// chunky style, a few body rows are then left out (avatarRows), so the hero is short and big-headed.
 // The portrait is the same drawing, zoomed in on the head.
 
 const AVATAR_W = 24, AVATAR_H = 32;
@@ -286,6 +287,14 @@ function avatarGrid(p) {
   return g;
 }
 
+// Rows of the 24 x 32 drawing that are kept: a few torso and leg rows are dropped for chibi proportions.
+// The head (rows 0 to 16) always stays the same.
+const AVATAR_DROP = { man: [20, 26, 27], woman: [19, 25, 27] };
+function avatarRows(p) {
+  const drop = AVATAR_DROP[p.body] || AVATAR_DROP.man;
+  return Array.from({ length: AVATAR_H }, (_, y) => y).filter(y => !drop.includes(y));
+}
+
 // The sword in the hero's right hand (the side facing the monster), blade up toward the monster.
 // The sword picture from gear-art.js is laid over the hand, then a 3x3 fist is drawn on top of the grip,
 // so the grip comes out above and below the fingers like the hero is really holding it.
@@ -294,7 +303,8 @@ function avatarHeldSword(p, held, outline) {
   if (!map) return "";
   const { rects } = pixelArtRects(map, gearPalette(held.ore));
   // Top-left pixel of the hand at the end of the right arm (see avatarGrid).
-  const [hx, hy] = p.body === "woman" ? [16, 22] : [17, 23];
+  const [hx, hy0] = p.body === "woman" ? [16, 22] : [17, 23];
+  const hy = avatarRows(p).indexOf(hy0); // the same row after the dropped rows
   // Sword map pixel (2, 10) sits under the fist's top-left. pixelArtRects draws map (c, r) at (c + 1, r + 1).
   const tx = hx - 3, ty = hy - 11;
   let out = `<g transform="translate(${tx} ${ty})"><g class="av-sword">${rects}</g></g>`;
@@ -317,12 +327,14 @@ function avatarHeldSword(p, held, outline) {
 // held (optional, "full" view only): the sword the hero grips in their right hand, e.g. { type: "sword", ore: "iron" }.
 function avatarSVG(profile, view = "full", cls = "", held = null) {
   const p = normalizeProfile(profile);
-  const g = avatarGrid(p);
-  const outline = "#140e0b";
-  const filled = (x, y) => y >= 0 && y < AVATAR_H && x >= 0 && x < AVATAR_W && g[y][x];
+  const full = avatarGrid(p);
+  const g = avatarRows(p).map(y => full[y]);
+  const H = g.length;
+  const outline = "#1a1016";
+  const filled = (x, y) => y >= 0 && y < H && x >= 0 && x < AVATAR_W && g[y][x];
   let rects = "";
   // Dark outline around the hero, one pixel wide.
-  for (let y = 0; y < AVATAR_H; y++) {
+  for (let y = 0; y < H; y++) {
     for (let x = 0; x < AVATAR_W; x++) {
       if (!g[y][x] && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => filled(x + dx, y + dy))) {
         rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${outline}"/>`;
@@ -330,7 +342,7 @@ function avatarSVG(profile, view = "full", cls = "", held = null) {
     }
   }
   // One <rect> per run of same-colored pixels in a row keeps the SVG small.
-  for (let y = 0; y < AVATAR_H; y++) {
+  for (let y = 0; y < H; y++) {
     let x = 0;
     while (x < AVATAR_W) {
       const c = g[y][x];
@@ -340,10 +352,10 @@ function avatarSVG(profile, view = "full", cls = "", held = null) {
       x = end;
     }
   }
-  let box = view === "portrait" ? "3 0 18 18" : `0 0 ${AVATAR_W} ${AVATAR_H}`;
+  let box = view === "portrait" ? "3 0 18 18" : `0 0 ${AVATAR_W} ${H}`;
   if (view === "full" && held) {
     const grip = avatarHeldSword(p, held, outline);
-    if (grip) { rects += grip; box = `0 0 ${AVATAR_W + 7} ${AVATAR_H}`; }
+    if (grip) { rects += grip; box = `0 0 ${AVATAR_W + 7} ${H}`; }
   }
   return `<svg class="avatar ${cls}" viewBox="${box}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
 }

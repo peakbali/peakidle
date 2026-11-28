@@ -1595,6 +1595,24 @@ body.in-editor { overflow: hidden; }
 @supports (image-rendering: pixelated) { .mon-pix .mp-l { image-rendering: pixelated; } }
 .mon-pix .m-eye { animation-name: m-blink-pix; }
 @keyframes m-blink-pix { 0%, 45%, 50%, 100% { opacity: 1; } 46%, 49% { opacity: 0; } }
+/* Element particles around some monsters (embers, ice shards, floating rocks, leaves, sparks) */
+.mon-pix .mfx { position: absolute; height: auto; image-rendering: pixelated; pointer-events: none; z-index: 1; }
+.mfx-rise  { animation: mfx-rise 1.8s steps(9) infinite; }
+.mfx-orbit { animation: mfx-orbit 2.6s steps(12) infinite; }
+.mfx-bob   { animation: mfx-bob 2.2s steps(8) infinite; }
+.mfx-drift { animation: mfx-drift 2.4s steps(10) infinite; }
+.mfx-zap   { animation: mfx-zap 1.2s steps(1) infinite; }
+@keyframes mfx-rise { 0% { transform: translateY(80%); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-260%); opacity: 0; } }
+@keyframes mfx-orbit {
+  0%, 100% { transform: translate(0, 0); } 25% { transform: translate(120%, -80%); }
+  50% { transform: translate(0, -160%); } 75% { transform: translate(-120%, -80%); }
+}
+@keyframes mfx-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-110%); } }
+@keyframes mfx-drift {
+  0% { transform: translate(0, 0) rotate(0); opacity: 0; } 20% { opacity: 1; }
+  100% { transform: translate(-220%, -140%) rotate(90deg); opacity: 0; }
+}
+@keyframes mfx-zap { 0%, 55%, 100% { opacity: 0; } 10%, 30% { opacity: 1; } 20% { opacity: 0.2; } }
 
 .anim-breathe { animation: m-breathe 2.4s ease-in-out infinite; }
 .anim-hop     { animation: m-hop 1.5s ease-in-out infinite; }
@@ -1852,7 +1870,7 @@ body.in-battle #panel-adventure * { animation-play-state: paused !important; }
 
 /* People who ask their device for less motion get still monsters */
 @media (prefers-reduced-motion: reduce) {
-  .mon-art, .mon-svg *, .boss-aura, .boss-sparks i, .chest-svg, .boss-trophy,
+  .mon-art, .mon-svg *, .mfx, .boss-aura, .boss-sparks i, .chest-svg, .boss-trophy,
   .vic-rays, .vic-confetti i, .vic-burst, .vic-title { animation: none !important; }
   .boss-sparks, .vic-confetti { display: none; }
 }
