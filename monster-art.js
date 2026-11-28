@@ -16,11 +16,11 @@
 
 // Soft fur colors for each element: [main, accent, glow].
 const MONSTER_FUR = {
-  fire:      ["#f59a52", "#d9603e", "#ffc94a"],
-  ice:       ["#94c8ee", "#5f92d0", "#d8f6ff"],
-  wind:      ["#92d6a2", "#4fa47c", "#d4ffe0"],
-  earth:     ["#c99868", "#8e6442", "#ffd98a"],
-  lightning: ["#f4d462", "#d9a23c", "#fff6a8"],
+  fire:      ["#ff8f45", "#e5483a", "#ffd34a"],
+  ice:       ["#6fc6f7", "#3d7fe0", "#e0f8ff"],
+  wind:      ["#72de8e", "#2fa56e", "#dcffe6"],
+  earth:     ["#d9a066", "#9c6336", "#ffe08a"],
+  lightning: ["#ffdb3d", "#f29c1f", "#fff8b0"],
 };
 const MONSTER_FIXED = {
   ink: { c: "#3a241c", flat: true },
@@ -37,7 +37,7 @@ const MONSTER_FIXED = {
 
 function monsterMats(element) {
   const [m, m2, gl] = MONSTER_FUR[element] || MONSTER_FUR.earth;
-  return { m, m2, bl: pxMix(m, "#fff4e0", 0.62), gl: { c: gl, smooth: true }, ...MONSTER_FIXED };
+  return { m, m2, bl: pxMix(m, "#fff6dc", 0.72), gl: { c: gl, smooth: true }, ...MONSTER_FIXED };
 }
 
 // ----- Little helpers used by many creatures -----
@@ -46,18 +46,27 @@ function pxFeet(p, cx, y, gap, mat = "m", rx = 2.4) {
   p.ell(cx - gap, y, rx, 1.5, mat, { flat: false });
   p.ell(cx + gap, y, rx, 1.5, mat, { flat: false });
 }
-// A face: eyes, cheeks and a mouth ("w" cat mouth, "o", "smile", "fang", "none").
+// A face: eyes, cheeks and a mouth ("w" cat mouth, "smile", "o", "fang", "flat", "none").
+// Placed on the grid, then drawn in whole pixels so tiny faces stay neat.
+const PX_MOUTHS = {
+  w: [[-2, 0], [-1, 1], [0, 0], [1, 1], [2, 0]],
+  smile: [[-1, 0], [0, 1], [1, 0]],
+  flat: [[-1, 0], [0, 0], [1, 0]],
+  fang: [[-1, 0], [0, 0], [1, 0], [2, 0]],
+  o: [[0, 0], [1, 0], [0, 1], [1, 1]],
+};
 function pxFace(p, cx, y, gap, mouth = "w", o = {}) {
-  p.eyes(cx, y, gap, o);
-  const sz = o.big ? 3 : o.size || 2;
-  if (!o.noBlush) p.cheeks(cx, y + sz + 1, gap + sz * 2 + 1, 2);
-  const my = y + sz + (o.mouthDrop || 1);
-  const ink = "ink";
-  if (mouth === "w") { p.dot(cx - 1, my, ink); p.dot(cx, my + 1, ink); p.dot(cx + 1, my, ink); p.dot(cx - 2, my + 1, ink); p.dot(cx + 2, my + 1, ink); }
-  else if (mouth === "smile") { p.dot(cx - 1, my, ink); p.dot(cx - 1 + 1, my + 1, ink); p.dot(cx + 1, my, ink); }
-  else if (mouth === "o") { p.dot(cx - 1, my, ink); p.dot(cx, my, ink); p.dot(cx - 1, my + 1, ink); p.dot(cx, my + 1, ink); }
-  else if (mouth === "fang") { p.dot(cx - 2, my, ink); p.dot(cx - 1, my, ink); p.dot(cx, my, ink); p.dot(cx + 1, my, ink); p.dot(cx - 2, my + 1, "white"); p.dot(cx + 1, my + 1, "white"); }
-  else if (mouth === "flat") { p.dot(cx - 1, my, ink); p.dot(cx, my, ink); }
+  const k = p.s, size = o.big ? 3 : o.size || 2;
+  const X = Math.round(cx * k), Y = Math.round(y * k), G = Math.max(2, Math.round(gap * k));
+  p.s = 1;
+  const lx = X - Math.floor(G / 2) - size, rx = X + Math.ceil(G / 2);
+  p.eye(lx, Y, o); p.eye(rx, Y, o);
+  if (!o.noBlush) { p.blush(lx - 2, Y + size, 2); p.blush(rx + size, Y + size, 2); }
+  const my = Y + size + Math.max(0, Math.round(((o.mouthDrop || 1) - 1) * k));
+  const pts = PX_MOUTHS[mouth];
+  if (pts) for (const [dx, dy] of pts) p.dot(X + dx - (mouth === "o" || mouth === "fang" ? 1 : 0), my + dy, mouth === "o" ? "red" : "ink");
+  if (mouth === "fang") { p.dot(X - 2, my + 1, "white"); p.dot(X + 1, my + 1, "white"); }
+  p.s = k;
 }
 // A pointy horn from (x, y) going up, bent a little to one side.
 function pxHorn(p, x, y, h, lean, mat = "bone", w = 2) {
@@ -77,7 +86,6 @@ const MONSTER_ART = {
     p.fur(18, 21, 11, 11, "m");
     p.fur(18, 26, 6.5, 5, "bl", { edge: false, fuzz: 0.8 });
     pxFace(p, 18, 17, 7, "w");
-    p.ell(18, 20.3, 1.6, 1.1, "pink", { edge: false });
     pxFeet(p, 18, 32, 5, "m");
   } },
   beetle: { anim: "scuttle", draw(p) {
@@ -159,8 +167,7 @@ const MONSTER_ART = {
     p.fur(8, 14, 3, 6, "m2"); p.fur(26, 14, 3, 6, "m2");
     p.fur(17, 17, 5, 3.5, "bl", { edge: false, fuzz: 0.6 });
     pxFace(p, 17, 11, 6, "w", { mouthDrop: 2 });
-    p.ell(17, 15, 1.6, 1.1, "ink", { edge: false });
-    p.ell(17, 20.5, 1.2, 1.5, "pink", { edge: false });
+    p.ell(17, 15.5, 1.3, 1, "ink", { edge: false });
     pxFeet(p, 18, 32, 5, "m");
   } },
   hawk: { anim: "flap", draw(p) {
@@ -339,22 +346,20 @@ const MONSTER_ART = {
 
   // ----- Danger level 7: Frostfang Tundra -----
   mammoth: { anim: "breathe", draw(p) {
-    p.fur(21, 20, 13, 11, "m", { fuzz: 1.6 });
-    for (const x of [12, 18, 24, 30]) p.rect(x - 2, 28, 4, 5, "m2");
-    p.fur(28, 17, 5, 7, "m2");
-    p.fur(11, 17, 8, 8, "m");
-    p.line(10, 21, 8, 28, "m", { w: 3 }); p.line(8, 28, 10, 31, "m", { w: 2, same: true });
-    p.line(5, 22, 3, 27, "bone", { w: 2 }); p.line(3, 27, 5, 29, "bone", { w: 2, same: true });
-    p.line(14, 23, 16, 28, "bone", { w: 2 }); p.line(16, 28, 14, 30, "bone", { w: 2, same: true });
-    p.fur(13, 9, 5, 3, "m2", { edge: false, fuzz: 1.6 });
-    p.eye(8, 15); p.eye(14, 15); p.blush(7, 18, 2); p.blush(15, 18, 2);
+    p.fur(22, 20, 12, 10, "m");
+    for (const x of [14, 20, 26, 31]) p.rect(x - 2, 27, 4, 6, "m2");
+    p.fur(6, 17, 4.5, 6.5, "m2"); p.fur(25, 17, 4.5, 6.5, "m2");
+    p.fur(15, 16, 9, 8.5, "m");
+    p.line(15, 22, 15, 29, "m", { w: 3 }); p.line(15, 29, 17, 31, "m", { w: 2, same: true });
+    p.line(11, 22, 9, 27, "bone", { w: 2 }); p.line(19, 22, 21, 27, "bone", { w: 2 });
+    p.fur(15, 9, 5, 2.5, "m2", { edge: false });
+    pxFace(p, 15, 14, 6, "none");
   } },
   owl: { anim: "breathe", draw(p) {
     p.poly([[8, 12], [7, 3], [13, 9]], "m2"); p.poly([[28, 12], [29, 3], [23, 9]], "m2");
     p.fur(18, 19, 11, 12, "m");
     p.fur(6, 21, 3, 6, "m2"); p.fur(30, 21, 3, 6, "m2");
     p.fur(18, 25, 7, 6, "bl", { edge: false });
-    for (const [x, y] of [[15, 23], [18, 25], [21, 23], [16, 28], [20, 28]]) { p.dot(x, y, "m2"); p.dot(x + 1, y, "m2", { same: true }); }
     p.ell(13, 14, 4, 4, "white"); p.ell(23, 14, 4, 4, "white");
     p.eye(12, 13, { big: true }); p.eye(22, 13, { big: true });
     p.poly([[17, 17], [19, 17], [18, 20]], "beak");
@@ -366,8 +371,7 @@ const MONSTER_ART = {
     p.fur(18, 20, 12, 12.5, "m");
     p.fur(18, 26, 7, 5.5, "bl", { edge: false });
     p.ell(18, 17, 3.6, 2.6, "bl", { edge: false, flat: true });
-    pxFace(p, 18, 12, 8, "w", { mouthDrop: 3 });
-    p.ell(18, 15.5, 1.4, 1, "ink", { edge: false });
+    pxFace(p, 18, 12, 8, "smile", { mouthDrop: 3 });
     p.fur(6, 22, 2.5, 4, "m"); p.fur(30, 22, 2.5, 4, "m");
     pxFeet(p, 18, 32, 6, "m", 2.8);
   } },
@@ -667,7 +671,7 @@ const BOSS_ART = {
       p.ell(32, 24, 10, 9, "d", { edge: true });
       p.fur(32, 15, 12, 4, "c", { edge: false, fuzz: 1.6 });
       p.glow(() => { for (const [x, h] of [[22, 8], [27, 11], [32, 13], [37, 11], [42, 8]]) p.poly([[x - 2, 10], [x, 10 - h], [x + 2, 10]], "F"); });
-      pxFace(p, 32, 22, 8, "smile", { size: 3, lid: "d", mouthDrop: 3 });
+      pxFace(p, 32, 22, 9, "smile", { size: 2, lid: "d", mouthDrop: 4 });
       pxSpark(p, 7, 18, "F"); pxSpark(p, 10, 44, "F");
     } },
   inferno_lord: {
@@ -757,9 +761,9 @@ function monsterArtHTML(m, extraClass = "") {
   const cacheKey = boss ? key : `${key}|${m.element}`;
   let pic = monsterArtCache[cacheKey];
   if (!pic) {
-    const size = boss ? 64 : 36;
+    const size = boss ? 48 : 30;
     const mats = boss ? { ...MONSTER_FIXED, ...art.pal } : monsterMats(m.element);
-    pic = pxPictureHTML(size, size, mats, art.draw, boss ? "mon-svg mon-pix boss-svg" : "mon-svg mon-pix", monsterSeed(key));
+    pic = pxPictureHTML(size, size, mats, art.draw, boss ? "mon-svg mon-pix boss-svg" : "mon-svg mon-pix", monsterSeed(key), size / (boss ? 64 : 36));
     monsterArtCache[cacheKey] = pic;
   }
   const anim = boss ? "boss" : art.anim || "breathe";
