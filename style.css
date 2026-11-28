@@ -1673,6 +1673,10 @@ body.in-editor { overflow: hidden; }
 .mon-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mon-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mon-body .buttons { margin-top: 2px; }
+.mon-body button.reroll { --btn-bg: #2d2a3a; color: #e8dcff; display: inline-flex; align-items: center; gap: 5px; }
+.mon-body button.reroll .px-icon { width: 16px; height: 16px; }
+.spawn-head .reroll-left { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted, #c9b89a); }
+.spawn-head .reroll-left .px-icon { width: 16px; height: 16px; }
 .mon-line { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .mon-line span { white-space: nowrap; }
 .boss-facts .mon-line { justify-content: center; }
