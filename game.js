@@ -331,6 +331,11 @@ const SPAWN = {
   lowerTierChance: 0.3,   // 30% of spawns are one tier below yours (from tier 2 up), for variety; 70% are your tier
 };
 
+// Reroll: swap a waiting normal monster for a new one of a different element (essence).
+// You hold up to 5 rerolls. Each one used comes back 12 minutes later (real time, also while
+// the game is closed), so that's 5 per hour.
+const REROLL = { max: 5, refillMs: 12 * 60 * 1000 };
+
 // Monster stats grow exponentially with tier: stat = start * growth ^ step.
 // Random monsters of tier T use step (T-1)*5 + 2, the boss of tier T uses step T*5 - 1 (plus BOSS_MULT).
 const MONSTER_SCALING = {
@@ -532,6 +537,7 @@ function freshState() {
     milestonesNew: [],    // milestones reached but not celebrated yet (the Congratulations window shows them)
     welcomed: false,      // has seen the Welcome window (it opens once by itself, then from the [?] button)
     farm: freshFarm(),    // Monster Farm (farm.js): bought with Souls, kept forever, its essence waits to be collected
+    rerolls: freshRerolls(), // monster rerolls left and when the next one comes back (see REROLL), kept on reincarnate
     lastSaved: Date.now(),
   };
   for (const a of ATTRIBUTES) s.attributes[a.id] = 0;
@@ -749,6 +755,7 @@ function load() {
     checkMilestones(s); // anything already reached (older saves) is added and celebrated once
     s.profile = normalizeProfile(saved.profile);
     s.farm = normalizeFarm(saved.farm, s.bestiary);
+    s.rerolls = normalizeRerolls(saved.rerolls);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
     console.warn("Could not load save", e);
@@ -905,11 +912,13 @@ function currentTier(s = state) { return Math.min(TIERS.length, s.bossesBeaten +
 function peakCleared() { return state.bossesBeaten >= TIERS.length; }
 
 // Put one new random monster on the screen: your tier, or sometimes one below, with a random element.
-function addSpawn(s) {
+// notElement (optional): never this element (a reroll always brings a different essence).
+function addSpawn(s, notElement) {
   const top = currentTier(s);
   const tier = top > 1 && Math.random() < SPAWN.lowerTierChance ? top - 1 : top;
   const creature = Math.floor(Math.random() * TIERS[tier - 1].creatures.length);
-  const element = ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)].id;
+  const pool = ELEMENTS.filter(e => e.id !== notElement);
+  const element = pool[Math.floor(Math.random() * pool.length)].id;
   const sp = { uid: s.nextUid++, tier, creature, element };
   s.spawns.push(sp);
   markSeen(s, sp);
@@ -918,14 +927,59 @@ function addSpawn(s) {
 
 // A monster left the screen (beaten or caught). A new one takes its spot right away,
 // unless an old save still has more than 3 waiting: then the spot just closes.
-function replaceSpawn(uid) {
+// notElement: for a reroll, the new monster never has this element.
+function replaceSpawn(uid, notElement) {
   const i = state.spawns.findIndex(x => x.uid === uid);
   if (i < 0) return;
-  if (state.spawns.length > SPAWN.max) { state.spawns.splice(i, 1); return; }
+  if (state.spawns.length > SPAWN.max && !notElement) { state.spawns.splice(i, 1); return; }
   state.spawns.splice(i, 1);
-  const sp = addSpawn(state);
+  const sp = addSpawn(state, notElement);
   state.spawns.pop();
   state.spawns.splice(i, 0, sp);
+}
+
+// ---------- Rerolls ----------
+// state.rerolls = { left: 0-5, next: time (ms) the next one comes back, or 0 when full }.
+function freshRerolls() { return { left: REROLL.max, next: 0 }; }
+function normalizeRerolls(r) {
+  const out = freshRerolls();
+  if (!r || typeof r !== "object") return out; // older saves start with all 5
+  if (typeof r.left === "number" && isFinite(r.left)) out.left = Math.max(0, Math.min(REROLL.max, Math.floor(r.left)));
+  if (out.left < REROLL.max) out.next = typeof r.next === "number" && r.next > 0 ? r.next : Date.now() + REROLL.refillMs;
+  return out;
+}
+// Give back the rerolls whose 12 minutes are up (also counts time the game was closed).
+function rerollTick(now = Date.now()) {
+  const r = state.rerolls;
+  if (r.left >= REROLL.max) { r.next = 0; return; }
+  // A clock set far back would leave "next" years away; never wait more than one refill.
+  if (r.next > now + REROLL.refillMs) r.next = now + REROLL.refillMs;
+  while (r.left < REROLL.max && now >= r.next) { r.left++; r.next += REROLL.refillMs; }
+  if (r.left >= REROLL.max) r.next = 0;
+}
+function canReroll() { return state.rerolls.left > 0 && !state.battle; }
+// Swap one waiting monster for a new random one with a different element.
+function rerollSpawn(uid) {
+  rerollTick();
+  const sp = state.spawns.find(x => x.uid === uid);
+  if (!sp || !canReroll()) return;
+  const r = state.rerolls;
+  if (r.left >= REROLL.max) r.next = Date.now() + REROLL.refillMs; // the clock starts with the first one used
+  r.left--;
+  const oldName = spawnMonster(sp).name;
+  replaceSpawn(uid, sp.element);
+  sfx("reroll");
+  const now = state.spawns.find(x => x.uid === state.nextUid - 1);
+  if (now) log(`🎲 Rerolled ${oldName} into ${spawnMonster(now).name}.`);
+  save();
+  render();
+}
+// "4/5" and, when not full, how long until the next one comes back ("+1 in 7:42").
+function rerollStatus() {
+  const r = state.rerolls;
+  if (r.left >= REROLL.max) return `${r.left}/${REROLL.max}`;
+  const secs = Math.max(0, Math.ceil((r.next - Date.now()) / 1000));
+  return `${r.left}/${REROLL.max} · +1 in ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
 
 // Keep 3 monsters waiting. A free spot is filled straight away (no timer).
@@ -1713,6 +1767,7 @@ function reincarnate() {
     milestonesNew: state.milestonesNew,
     welcomed: state.welcomed,
     farm: state.farm, // the Monster Farm and the essence waiting in it
+    rerolls: state.rerolls, // rerolls refill by the clock, so reincarnating doesn't refill them
   };
   state = Object.assign(freshState(), keep);
   sfx("souls");
@@ -1988,7 +2043,8 @@ function monsterCard(m) {
         <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}</div>
         ${weakLine(m)}
         ${statsLine(m)}
-        <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
+        <div class="buttons"><button data-k="fight" class="primary">Fight</button>
+          <button data-k="reroll" class="reroll" title="Swap for a new monster of a different element">${pxIcon("reroll", "ti")} Reroll</button></div>
       </div>
     </div>`);
   card.dataset.uid = m.uid;
@@ -2009,6 +2065,8 @@ function caughtOrb(m) {
 
 function wireMonsterCard(card, m) {
   card.querySelector('[data-k="fight"]').onclick = () => startBattle(m.uid);
+  const reroll = card.querySelector('[data-k="reroll"]');
+  if (reroll) reroll.onclick = () => rerollSpawn(m.uid);
   const chest = card.querySelector('[data-k="chest"]');
   const reward = card.querySelector('[data-k="reward"]');
   chest.onclick = () => {
@@ -2095,7 +2153,9 @@ function buildAdventure() {
     </div>
   </div>`));
 
-  box.appendChild(el(`<h3 class="spawn-head"><span>Monsters</span></h3>`));
+  box.appendChild(el(`<h3 class="spawn-head"><span>Monsters</span>
+    <span class="reroll-left" title="Rerolls left. Each one used comes back after 12 minutes (5 per hour).">${pxIcon("reroll", "ti")} <span class="num" data-k="rerolls"></span></span></h3>`));
+  refs.rerollHead = box.querySelector('[data-k="rerolls"]');
   for (const sp of state.spawns) {
     const card = monsterCard(spawnMonster(sp));
     refs.monsters.push(card);
@@ -2116,6 +2176,8 @@ function renderAdventure() {
   if (refs.adventureKey !== adventureKey()) buildAdventure();
   for (const e of ELEMENTS) set(refs.drops[e.id], "n", fmtShort(state.drops[e.id]));
   renderBestiaryButton();
+  rerollTick();
+  if (refs.rerollHead) { const t = `Rerolls ${rerollStatus()}`; if (refs.rerollHead.textContent !== t) refs.rerollHead.textContent = t; }
   const spawnByUid = Object.fromEntries(state.spawns.map(sp => [sp.uid, sp]));
   for (const card of refs.monsters) {
     const orb = card.querySelector('[data-k="orb"]');
@@ -2127,6 +2189,8 @@ function renderAdventure() {
         orb.title = got ? "Already in your Bestiary" : "Not caught yet in this color";
       }
     }
+    const rr = card.querySelector('[data-k="reroll"]');
+    if (rr) rr.disabled = !canReroll();
     const btn = card.querySelector('[data-k="fight"]');
     const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
     setIconText(btn, label);
