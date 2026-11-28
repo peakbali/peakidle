@@ -34,16 +34,16 @@ function pxHash(x, y, s = 0) {
 // The four shades of a material: line (sketch outline), shadow, base, light.
 function pxTones(base) {
   return {
-    line: pxMix(base, "#2a1712", 0.72),
-    shadow: pxMix(base, "#4a2a3a", 0.26),
+    line: pxMix(base, "#2a1220", 0.8),
+    shadow: pxMix(base, "#5a2448", 0.24),
     base,
     light: pxMix(base, "#fff8ea", 0.34),
   };
 }
 
 class PixPainter {
-  constructor(W, H, mats, seed = 1) {
-    this.W = W; this.H = H; this.seed = seed;
+  constructor(W, H, mats, seed = 1, scale = 1) {
+    this.W = W; this.H = H; this.seed = seed; this.s = scale;
     this.mats = {};
     for (const k in mats) {
       const m = typeof mats[k] === "string" ? { c: mats[k] } : mats[k];
@@ -78,6 +78,9 @@ class PixPainter {
   }
   // Fluffy oval: the edge is a ring of little rounded tufts.
   fur(cx, cy, rx, ry, mat, o = {}) {
+    return this.ell(cx, cy, rx, ry, mat, o);
+  }
+  furOld(cx, cy, rx, ry, mat, o = {}) {
     const part = this._part(o);
     const fuzz = o.fuzz == null ? 1.3 : o.fuzz;
     const n = o.tufts || Math.max(6, Math.round((rx + ry) * 0.85));
@@ -98,7 +101,8 @@ class PixPainter {
     }
   }
   ell(cx, cy, rx, ry, mat, o = {}) {
-    const part = this._part(o);
+    const part = this._part(o), k = this.s;
+    cx *= k; cy *= k; rx = Math.max(0.7, rx * k); ry = Math.max(0.7, ry * k);
     for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
       const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
       if (dx * dx + dy * dy <= 1) this._set(x, y, mat, part, o);
@@ -106,6 +110,7 @@ class PixPainter {
   }
   poly(pts, mat, o = {}) {
     const part = this._part(o);
+    pts = pts.map(([x, y]) => [x * this.s, y * this.s]);
     const ys = pts.map(p => p[1]), xs = pts.map(p => p[0]);
     for (let y = Math.floor(Math.min(...ys)); y <= Math.max(...ys); y++) for (let x = Math.floor(Math.min(...xs)); x <= Math.max(...xs); x++) {
       const px = x + 0.5, py = y + 0.5;
@@ -118,32 +123,35 @@ class PixPainter {
     }
   }
   rect(x, y, w, h, mat, o = {}) {
-    const part = this._part(o);
+    const part = this._part(o), k = this.s;
+    x = Math.round(x * k); y = Math.round(y * k); w = Math.max(1, Math.round(w * k)); h = Math.max(1, Math.round(h * k));
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this._set(x + i, y + j, mat, part, o);
   }
   line(x0, y0, x1, y1, mat, o = {}) {
-    const part = this._part(o);
-    const w = o.w || 1;
+    const part = this._part(o), k = this.s;
+    x0 *= k; y0 *= k; x1 *= k; y1 *= k;
+    const w = Math.max(1, Math.round((o.w || 1) * k));
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1) * 2;
     for (let k = 0; k <= steps; k++) {
       const x = x0 + (x1 - x0) * k / steps, y = y0 + (y1 - y0) * k / steps;
       for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) this._set(Math.floor(x - (w - 1) / 2) + i, Math.floor(y - (w - 1) / 2) + j, mat, part, o);
     }
   }
-  dot(x, y, mat, o = {}) { this._set(x, y, mat, this._part({ same: o.same, edge: false }), { flat: true, ...o }); }
+  dot(x, y, mat, o = {}) { this._set(x * this.s, y * this.s, mat, this._part({ same: o.same, edge: false }), { flat: true, ...o }); }
   // Paint an exact color on what is already there (keeps the part, so no new outline).
-  tint(x, y, color) { const i = y * this.W + x; if (x >= 0 && y >= 0 && x < this.W && y < this.H && this.mat[i]) this.over[i] = color; }
+  tint(x, y, color) { x = Math.round(x * this.s); y = Math.round(y * this.s); const i = y * this.W + x; if (x >= 0 && y >= 0 && x < this.W && y < this.H && this.mat[i]) this.over[i] = color; }
   // A dot eye. Underneath (body layer) the eye is drawn closed; the eye layer holds it open.
   eye(x, y, o = {}) {
     const ink = o.ink || "#2a1a16", hi = o.hi || "#ffffff";
     const size = o.big ? 3 : o.size || 2;
     const closed = this.mats[o.lid] ? this.mats[o.lid].t.line : "#3a241c";
+    x = Math.round(x * this.s); y = Math.round(y * this.s);
     for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) {
       const X = x + i, Y = y + j;
       if (X < 0 || Y < 0 || X >= this.W || Y >= this.H) continue;
       if (o.big && (i !== 1 && j !== 1) && o.round) continue;
       this.eyeL[Y * this.W + X] = ink;
-      if (j === size - 1) this.tint(X, Y, closed);
+      if (j === size - 1 && this.mat[Y * this.W + X]) this.over[Y * this.W + X] = closed;
     }
     if (size > 1 && !o.noHi) this.eyeL[y * this.W + x + (o.hiRight ? size - 1 : 0)] = hi;
     if (o.white) { // a white ring around a big eye (frogs, owls)
@@ -156,17 +164,18 @@ class PixPainter {
     }
   }
   eyes(cx, y, gap, o = {}) {
-    const size = o.big ? 3 : o.size || 2;
-    this.eye(Math.round(cx - gap / 2 - size), y, o);
-    this.eye(Math.round(cx + gap / 2), y, { ...o, hiRight: false });
+    const size = (o.big ? 3 : o.size || 2) / this.s;
+    this.eye(cx - gap / 2 - size, y, o);
+    this.eye(cx + gap / 2, y, { ...o, hiRight: false });
   }
   blush(x, y, w = 2, h = 1) {
+    x = Math.round(x * this.s); y = Math.round(y * this.s);
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
       const X = x + i, Y = y + j;
       if (X >= 0 && Y >= 0 && X < this.W && Y < this.H && this.mat[Y * this.W + X]) this.blushA[Y * this.W + X] = 1;
     }
   }
-  cheeks(cx, y, gap, w = 2) { this.blush(Math.round(cx - gap / 2 - w), y, w); this.blush(Math.round(cx + gap / 2), y, w); }
+  cheeks(cx, y, gap, w = 2) { this.blush(cx - gap / 2 - w / this.s, y, w); this.blush(cx + gap / 2, y, w); }
   glow(fn) { this.glowing = true; fn(); this.glowing = false; }
   // Everything drawn inside fn is mirrored left to right around column cx (for symmetric parts).
   mirror(cx, fn) {
@@ -205,10 +214,10 @@ class PixPainter {
         else {
           const rel = (y - top[p]) / Math.max(1, bot[p] - top[p]);
           const rimTL = partAt(x - 1, y - 1) !== p || partAt(x, y - 2) !== p;
-          const rimBR = partAt(x + 1, y + 2) !== p || partAt(x + 2, y + 1) !== p;
-          if (rimTL && !rimBR) c = T.light;
-          else if (rimBR || rel > 0.82) c = T.shadow;
-          if (!this.flat[i] && !m.smooth) {
+          const rimBR = partAt(x + 1, y + 1) !== p && partAt(x, y + 1) !== p || partAt(x + 1, y + 1) !== p && partAt(x + 1, y) !== p;
+          if (rimTL && !rimBR && m.shine) c = T.light;
+          else if (rimBR || rel > 0.85) c = T.shadow;
+          if (false) {
             // Fur: short up-and-down strokes of light and dark.
             const h = pxHash(x, Math.floor((y + (x % 3)) / 2), this.seed);
             if (h < 0.13) c = T.shadow;
@@ -217,7 +226,7 @@ class PixPainter {
           }
         }
       }
-      if (this.blushA[i]) c = pxMix(c, "#ff8a96", 0.62);
+      if (this.blushA[i]) c = pxMix(c, "#ff6f8e", 0.7);
       body[i] = c;
     }
     // Sketchy outline around everything, with a few stray fur hairs.
@@ -234,7 +243,7 @@ class PixPainter {
           const q = partAt(x + dx, y + dy);
           if (q > best) best = q;
         }
-        if (best && pxHash(x, y, this.seed + 5) < 0.42) line = best;
+        line = 0;
       }
       if (line) {
         const j = this.part.indexOf(line);
@@ -264,8 +273,8 @@ function pxGridPNG(grid, W, H) {
 }
 
 // Paint a picture and return its HTML (three stacked images).
-function pxPictureHTML(W, H, mats, draw, className, seed) {
-  const p = new PixPainter(W, H, mats, seed);
+function pxPictureHTML(W, H, mats, draw, className, seed, scale = 1) {
+  const p = new PixPainter(W, H, mats, seed, scale);
   draw(p, p.mats);
   const { body, eyes, glow } = p.colors();
   const b = pxGridPNG(body, W, H), e = pxGridPNG(eyes, W, H), g = pxGridPNG(glow, W, H);
