@@ -19,6 +19,62 @@ const FARM = {
 };
 const FARM_DAY_MS = 24 * 60 * 60 * 1000;
 
+// ---------- Boss Bestiary and boss catching ----------
+// Every boss you beat is counted (kept forever). After BOSS_CATCH.wins wins against a boss you can
+// try to catch it (at half the normal chance). A caught boss lives in the farm at twice the size and,
+// once per boss (copies don't stack): makes 1 essence of its element every hour, adds free points to
+// every attribute and a free level of Element Mastery in its element (this one can go past the max).
+// Releasing every copy of a boss takes its bonus away until you catch it again.
+const BOSS_CATCH = {
+  wins: 5,            // wins needed before a boss can be caught
+  chance: 0.5,        // x the normal catch chance
+  perDay: 24,         // essence per caught boss per day (1 an hour)
+  attrPoints: 3,      // free points in every attribute per caught boss
+  mastery: 1,         // free Element Mastery levels in its element per caught boss
+};
+
+function bossList() { return TIERS.map((t, i) => ({ ...t.boss, tier: i + 1 })); }
+function bossBookEntry(id) {
+  if (!state.bossBook) state.bossBook = {};
+  if (!state.bossBook[id]) state.bossBook[id] = { wins: 0, caught: 0 };
+  return state.bossBook[id];
+}
+// Loaded save -> clean boss book. Saves from before it: bosses beaten this run count as 1 win each.
+function normalizeBossBook(saved, bossesBeaten) {
+  const out = {};
+  const ids = new Set(bossList().map(b => b.id));
+  if (saved && typeof saved === "object") {
+    for (const [id, v] of Object.entries(saved)) {
+      if (!ids.has(id) || !v) continue;
+      const wins = Math.max(0, Math.floor(v.wins || 0)), caught = Math.max(0, Math.floor(v.caught || 0));
+      if (wins || caught) out[id] = { wins, caught };
+    }
+  } else {
+    bossList().slice(0, bossesBeaten || 0).forEach(b => { out[b.id] = { wins: 1, caught: 0 }; });
+  }
+  return out;
+}
+function bossWins(id) { return ((state.bossBook || {})[id] || {}).wins || 0; }
+function bossCaught(id) { return ((state.bossBook || {})[id] || {}).caught || 0; }
+function bossCatchable(m) { return !!(m && m.boss && bossWins(m.art) >= BOSS_CATCH.wins); }
+function caughtBosses() { return bossList().filter(b => bossCaught(b.id) > 0); }
+
+// Free attribute points from caught bosses, as stats: { hp: 60, attack: 3, ... } per boss.
+function bossAttrStats() {
+  const n = caughtBosses().length, out = {};
+  for (const a of ATTRIBUTES) out[a.id] = n * BOSS_CATCH.attrPoints * a.perPoint;
+  return out;
+}
+// Free Element Mastery levels from caught bosses of this element.
+function bossMastery(elId) { return caughtBosses().filter(b => b.element === elId).length * BOSS_CATCH.mastery; }
+
+// A boss was beaten (or caught, which counts as beating it too).
+function recordBossWin(m, caught) {
+  const e = bossBookEntry(m.art);
+  e.wins += 1;
+  if (caught) e.caught += 1;
+}
+
 function freshFarm() { return { owned: false, last: 0, stash: {} }; }
 
 // bestiary is the loaded Bestiary. Older saves kept released monsters in a separate list
@@ -61,6 +117,9 @@ function farmKinds() {
 function farmAnimals() {
   const out = [];
   for (const k of farmKinds()) for (let n = 0; n < k.count; n++) out.push({ ...k, n });
+  for (const b of caughtBosses()) for (let n = 0; n < bossCaught(b.id); n++) {
+    out.push({ key: b.id, tier: b.tier, name: b.name, element: b.element, boss: true, n });
+  }
   return out;
 }
 
@@ -82,6 +141,7 @@ function farmRates() {
   const r = {};
   for (const e of ELEMENTS) r[e.id] = 0;
   for (const k of farmKinds()) r[k.element] += FARM.perDay;
+  for (const b of caughtBosses()) r[b.element] += BOSS_CATCH.perDay;
   return r;
 }
 
@@ -105,6 +165,7 @@ function farmTick(now = Date.now()) {
 function farmSignature() {
   let s = "";
   for (const [k, v] of Object.entries(state.bestiary || {})) if (v && v.el) s += k + JSON.stringify(v.el) + ";";
+  for (const [k, v] of Object.entries(state.bossBook || {})) if (v && v.caught) s += k + v.caught + ";";
   return s;
 }
 
@@ -146,7 +207,7 @@ const farmView = { pen: null, canvas: null, ctx: null, critters: [], sig: "", W:
 
 // The picture layers of a monster (body with closed eyes, open eyes), reused from the Bestiary art.
 function farmSpriteLayers(a) {
-  const html = monsterArtHTML(bestiaryMonster(a, a.element));
+  const html = monsterArtHTML(a.boss ? bossMonster(a.tier) : bestiaryMonster(a, a.element));
   const srcs = [...html.matchAll(/<img class="mp-l( m-eye| m-glow)?" src="([^"]+)"/g)];
   const body = srcs.find(m => !m[1]), eye = srcs.find(m => m[1] === " m-eye");
   return { body: body && body[2], eye: eye && eye[2] };
@@ -269,10 +330,11 @@ function farmFill() {
     const id = `${a.key}|${a.element}|${a.n}`;
     const prev = (byKind[`${a.key}|${a.element}`] || []).shift();
     if (prev) return prev;
-    const anim = (MONSTER_ART[a.key] || {}).anim || "breathe";
+    const anim = a.boss ? "boss" : (MONSTER_ART[a.key] || {}).anim || "breathe";
     const x = Math.random(), y = Math.random();
     return {
-      id, kind: `${a.key}|${a.element}`, element: a.element, name: `${ELEMENT_ADJECTIVE[a.element]} ${a.name}`,
+      id, kind: `${a.key}|${a.element}`, element: a.element, name: a.boss ? a.name : `${ELEMENT_ADJECTIVE[a.element]} ${a.name}`,
+      boss: !!a.boss, big: !!a.boss,
       pics: farmPics(a), fly: FARM_FLYERS.has(anim), face: Math.random() < 0.5 ? 1 : -1,
       x, y, fx: x, fy: y, t0: 0, t1: 0, state: "idle", since: now, until: now + Math.random() * 6000,
       blink: Math.random() * 6000, alpha: 1,
@@ -288,7 +350,7 @@ function farmResize(force) {
   if (!pen) return;
   const width = pen.clientWidth;
   if (!width || (!force && width === farmView.W)) return;
-  const n = farmView.critters.filter(c => !c.leaving).length;
+  const n = farmView.critters.reduce((t, c) => t + (c.leaving ? 0 : c.big ? 4 : 1), 0);
   const { size, H } = farmLayout(n, width);
   farmView.W = width; farmView.H = H; farmView.size = size;
   pen.style.height = H + "px";
@@ -319,8 +381,14 @@ function farmPos(c, now) {
     const t = Math.max(0, (now - c.t0) / (c.t1 - c.t0));
     x = c.fx + (c.x - c.fx) * t; y = c.fy + (c.y - c.fy) * t;
   }
-  const s = farmView.size;
+  const s = farmSize(c);
   return { px: x * (farmView.W - s), py: 6 + y * (farmView.H - s - 10), sy: y };
+}
+function farmSize(c) { return farmView.size * (c.big ? 2 : 1); }
+// Turn a spot in pixels back into 0..1 of the free room for this animal.
+function farmUnpos(c, px, py) {
+  const s = farmSize(c);
+  return { x: px / Math.max(1, farmView.W - s), y: (py - 6) / Math.max(1, farmView.H - s - 10) };
 }
 
 // Soft oval shadows, drawn once and stamped under every animal (much cheaper than drawing ovals).
@@ -340,7 +408,7 @@ function farmShadows() {
 
 // Draw the whole herd. Runs about 30 times a second, only while the pen is on screen.
 function farmDraw(now) {
-  const { ctx, dpr, size: s } = farmView;
+  const { ctx, dpr, size: s0 } = farmView;
   const cv = farmView.canvas;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cv.width, cv.height);
@@ -348,11 +416,12 @@ function farmDraw(now) {
   ctx.imageSmoothingEnabled = false;
   const list = farmView.critters;
   for (const c of list) { const p = farmPos(c, now); c.px = p.px; c.py = p.py; }
-  list.sort((a, b) => a.py - b.py);
-  ctx.font = `${Math.round(s * 0.5)}px "Jersey 15", monospace`;
+  list.sort((a, b) => (a.py + farmSize(a)) - (b.py + farmSize(b))); // feet lower on screen = in front
+  ctx.font = `${Math.round(s0 * 0.5)}px "Jersey 15", monospace`;
   const shadows = farmShadows();
   for (const c of list) {
     if (!c.pics.body.complete) continue;
+    const s = farmSize(c);
     const t = now - c.since;
     let dy = 0, sx = 1, sy = 1, rot = 0, eyes = true;
     const flying = c.fly && c.state !== "sleep";
@@ -451,8 +520,8 @@ function farmChoose(c, now) {
 }
 
 function farmWalk(c, nx, ny, now, speed) {
-  const p = farmPos(c, now), s = farmView.size;
-  c.fx = p.px / Math.max(1, farmView.W - s); c.fy = (p.py - 6) / Math.max(1, farmView.H - s - 10);
+  const p = farmPos(c, now), u = farmUnpos(c, p.px, p.py);
+  c.fx = u.x; c.fy = u.y;
   const dist = Math.hypot((nx - c.fx) * farmView.W, (ny - c.fy) * farmView.H);
   if (Math.abs(nx - c.fx) > 0.01) c.face = nx > c.fx ? 1 : -1;
   c.x = nx; c.y = ny;
@@ -464,10 +533,11 @@ function farmWalk(c, nx, ny, now, speed) {
 
 // Which animal is under a tap (the one drawn on top wins).
 function farmHit(x, y) {
-  const s = farmView.size, list = farmView.critters;
+  const list = farmView.critters;
   for (let i = list.length - 1; i >= 0; i--) {
     const c = list[i];
     if (c.leaving || c.px === undefined) continue;
+    const s = farmSize(c);
     const top = c.py - (c.fly ? s * 0.28 : 0);
     if (x >= c.px - 3 && x <= c.px + s + 3 && y >= top - 3 && y <= top + s + 3) return c;
   }
@@ -498,7 +568,8 @@ function farmReleaseTap() {
   }
   farmTick(); // count what it made up to now
   const [key, el] = c.kind.split("|");
-  farmTakeFromBestiary(state.bestiary, key, el, 1);
+  if (c.boss) { const e = bossBookEntry(key); e.caught = Math.max(0, e.caught - 1); }
+  else farmTakeFromBestiary(state.bestiary, key, el, 1);
   farmSelect(null);
   log(`You released a ${c.name}. Bye bye! Catch it again to bring it back.`);
   const now = performance.now();
@@ -517,14 +588,15 @@ function farmPet(c) {
   farmSelect(c);
   const now = performance.now();
   farmSetState(c, "hop", now);
-  c.t1 = 0; c.fx = c.x = c.px / Math.max(1, farmView.W - farmView.size); c.fy = c.y = (c.py - 6) / Math.max(1, farmView.H - farmView.size - 10);
+  const u = farmUnpos(c, c.px, c.py);
+  c.t1 = 0; c.fx = c.x = u.x; c.fy = c.y = u.y;
   c.until = now + 1200;
   const old = farmView.pen.querySelector(".fm-tag");
   if (old) old.remove();
   const tag = document.createElement("div");
   tag.className = "fm-tag";
   tag.innerHTML = emo(`${elementById[c.element].icon} ${escapeHtml(c.name)}`);
-  const s = farmView.size;
+  const s = farmSize(c);
   tag.style.left = Math.min(farmView.W - 60, Math.max(60, c.px + s / 2)) + "px";
   tag.style.top = Math.max(0, c.py - 22) + "px";
   farmView.pen.appendChild(tag);
