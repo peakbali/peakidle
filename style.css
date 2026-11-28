@@ -1672,7 +1672,6 @@ body.in-editor { overflow: hidden; }
 .mon-body { display: grid; gap: 4px; align-content: start; min-width: 0; }
 .mon-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mon-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.mon-body .buttons { margin-top: 2px; }
 .reroll-btn { --btn-bg: #2d2a3a; padding: 3px 5px; min-height: 0; line-height: 0; }
 .reroll-btn .px-icon { width: 22px; height: 22px; display: block; }
 .spawn-head .reroll-left { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted, #c9b89a); }
@@ -1759,6 +1758,51 @@ body.in-editor { overflow: hidden; }
 .boss-loot { justify-content: center; }
 .boss-show .mon-reward { justify-self: stretch; }
 .boss-fight { width: 100%; max-width: 340px; margin-top: 4px; }
+
+/* ---------- Fight button: a forged crimson blade plate ----------
+   Pointed pixel ends (stepped clip-path), a dark iron outline, a crimson face with a bright top
+   edge and a darker lower half, two gold rivets, and a slow shine that sweeps across it. */
+button.fight-btn {
+  --fb-clip: polygon(calc(100% - 14px) 0px, calc(100% - 14px) 4px, calc(100% - 12px) 4px, calc(100% - 12px) 8px, calc(100% - 8px) 8px, calc(100% - 8px) 12px, calc(100% - 6px) 12px, calc(100% - 6px) 16px, calc(100% - 4px) 16px, calc(100% - 4px) 20px, calc(100% - 2px) 20px, calc(100% - 2px) 24px, calc(100% - 4px) 24px, calc(100% - 4px) 28px, calc(100% - 6px) 28px, calc(100% - 6px) 32px, calc(100% - 8px) 32px, calc(100% - 8px) 36px, calc(100% - 12px) 36px, calc(100% - 12px) 40px, calc(100% - 14px) 40px, calc(100% - 14px) 44px, 14px 44px, 14px 40px, 12px 40px, 12px 36px, 8px 36px, 8px 32px, 6px 32px, 6px 28px, 4px 28px, 4px 24px, 2px 24px, 2px 20px, 4px 20px, 4px 16px, 6px 16px, 6px 12px, 8px 12px, 8px 8px, 12px 8px, 12px 4px, 14px 4px, 14px 0px);
+  width: 100%; height: 44px; min-height: 44px; padding: 0 22px;
+  border: 0; background: transparent; box-shadow: none;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--px); font-size: 24px; line-height: 1; letter-spacing: 1px;
+  color: #fff3d6; text-shadow: 0 2px 0 #4a0e06, 2px 0 0 #4a0e06, -1px 0 0 #4a0e06;
+  isolation: isolate; overflow: hidden; clip-path: var(--fb-clip);
+}
+button.fight-btn::before { /* iron outline */
+  content: ""; position: absolute; inset: 0; z-index: -3; background: #1a1310; clip-path: var(--fb-clip);
+}
+button.fight-btn::after { /* crimson face, inset 3px from the outline */
+  content: ""; position: absolute; inset: 3px 4px; z-index: -2; clip-path: var(--fb-clip);
+  background:
+    radial-gradient(circle, #ffe58f 0 2px, #b0741a 2px 3px, transparent 3px) 18px 50% / 8px 8px no-repeat,
+    radial-gradient(circle, #ffe58f 0 2px, #b0741a 2px 3px, transparent 3px) calc(100% - 18px) 50% / 8px 8px no-repeat,
+    linear-gradient(90deg, transparent 0 40%, rgba(255, 240, 210, 0.35) 46% 50%, transparent 56%) -150% 0 / 60% 100% no-repeat,
+    linear-gradient(#ff8a5c 0 3px, #d9442a 3px 50%, #a82a18 50% calc(100% - 3px), #6e170c calc(100% - 3px));
+  animation: fight-shine 3.2s ease-in-out infinite;
+}
+@keyframes fight-shine {
+  0%, 55% { background-position: 18px 50%, calc(100% - 18px) 50%, -150% 0, 0 0; }
+  100%    { background-position: 18px 50%, calc(100% - 18px) 50%, 250% 0, 0 0; }
+}
+button.fight-btn .px-icon { width: 22px; height: 22px; filter: drop-shadow(0 2px 0 #4a0e06); }
+button.fight-btn:active:not(:disabled) { transform: translateY(2px); }
+button.fight-btn:disabled { opacity: 1; filter: grayscale(0.85) brightness(0.65); }
+button.fight-btn:disabled::after { animation: none; }
+button.fight-btn.boss-fight::after {
+  background:
+    radial-gradient(circle, #ffe58f 0 2px, #b0741a 2px 3px, transparent 3px) 18px 50% / 8px 8px no-repeat,
+    radial-gradient(circle, #ffe58f 0 2px, #b0741a 2px 3px, transparent 3px) calc(100% - 18px) 50% / 8px 8px no-repeat,
+    linear-gradient(90deg, transparent 0 40%, rgba(255, 240, 210, 0.35) 46% 50%, transparent 56%) -150% 0 / 60% 100% no-repeat,
+    linear-gradient(#c9a2ff 0 3px, #8a3ad0 3px 50%, #5a2f8a 50% calc(100% - 3px), #34184f calc(100% - 3px));
+}
+.mon-body .buttons { margin-top: 4px; }
+/* Element shown as its icon only (the name is in the tooltip). */
+.el.el-icon { padding: 2px 4px; line-height: 0; }
+.el.el-icon .px-icon { width: 20px; height: 20px; }
+.mon-line .el-mini .px-icon { width: 16px; height: 16px; vertical-align: -3px; }
 .boss-show.beaten .mon-art { filter: grayscale(0.75) brightness(0.55); animation: none; }
 .boss-show.beaten .boss-aura { animation: none; opacity: 0.4; }
 .boss-trophy {

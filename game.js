@@ -2007,10 +2007,12 @@ if (typeof document !== "undefined") {
   });
 }
 
-function elementTag(elementId) {
+// An element as a small colored tag: just its icon (the name shows on hover), or icon + name when full.
+function elementTag(elementId, full) {
   if (!elementId) return `<span class="el el-none">Neutral</span>`;
   const e = elementById[elementId];
-  return `<span class="el el-${e.id}">${e.icon} ${e.name}</span>`;
+  if (full) return `<span class="el el-${e.id}">${e.icon} ${e.name}</span>`;
+  return `<span class="el el-icon el-${e.id}" title="${e.name}" aria-label="${e.name}">${e.icon}</span>`;
 }
 
 
@@ -2023,8 +2025,8 @@ function rewardText(m) {
 // "Weak ⚡ Lightning · Resists ❄️ Ice" and the monster's stats, kept short so cards stay small.
 function weakLine(m) {
   const weak = elementById[weaknessOf(m.element)], strong = elementById[strengthOf(m.element)];
-  return `<div class="small mon-line"><span title="Weak to ${weak.name}: your ${weak.name} skills do extra damage">Weak ${weak.icon} ${weak.name}</span>
-    <span title="Resists ${strong.name}: your ${strong.name} skills do less damage">Resists ${strong.icon} ${strong.name}</span></div>`;
+  return `<div class="small mon-line"><span title="Weak to ${weak.name}: your ${weak.name} skills do extra damage">Weak <span class="el-mini">${weak.icon}</span></span>
+    <span title="Resists ${strong.name}: your ${strong.name} skills do less damage">Resists <span class="el-mini">${strong.icon}</span></span></div>`;
 }
 function statsLine(m) {
   return `<div class="small mon-line"><span title="HP">❤️ ${fmt(m.stats.hp)}</span><span title="Attack">⚔️ ${fmt(m.stats.attack)}</span>
@@ -2049,7 +2051,7 @@ function monsterCard(m) {
         <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}</div>
         ${weakLine(m)}
         ${statsLine(m)}
-        <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
+        <div class="buttons"><button data-k="fight" class="fight-btn">⚔️ Fight</button></div>
       </div>
     </div>`);
   card.dataset.uid = m.uid;
@@ -2109,7 +2111,7 @@ function bossShowcase(m) {
       </div>
       <div class="mon-tags boss-loot">${chestButton(m)}<span class="small">Tap the chest to see the rewards</span></div>
       <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}${next ? ` + opens ${next.icon} ${next.name}` : ""}</div>
-      <button data-k="fight" class="primary big wide boss-fight">⚔️ Fight the boss</button>
+      <button data-k="fight" class="fight-btn boss-fight">⚔️ Fight the boss</button>
     </div>`);
   wireMonsterCard(card, m);
   return card;
@@ -2197,7 +2199,7 @@ function renderAdventure() {
     const rr = card.querySelector('[data-k="reroll"]');
     if (rr) rr.disabled = !canReroll();
     const btn = card.querySelector('[data-k="fight"]');
-    const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "Fight";
+    const label = state.battle ? "In a fight" : card.classList.contains("boss-show") ? "⚔️ Fight the boss" : "⚔️ Fight";
     setIconText(btn, label);
     btn.disabled = !canFight();
   }

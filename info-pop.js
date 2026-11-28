@@ -90,7 +90,7 @@ function skillInfoHTML(sk, levelOverride) {
       <div class="ip-pic">${skillArtSVG(sk.id)}</div>
       <div class="ip-title">
         <div class="ip-name">${sk.name}</div>
-        <div class="ip-tags">${elementTag(sk.element)}<span class="tag">${g.name}</span></div>
+        <div class="ip-tags">${elementTag(sk.element, true)}<span class="tag">${g.name}</span></div>
       </div>
     </div>
     <div class="ip-desc">${sk.desc}</div>
@@ -152,7 +152,7 @@ function monsterInfoHTML(m, live) {
       <div class="ip-pic ip-mon">${monsterArtHTML(m)}</div>
       <div class="ip-title">
         <div class="ip-name">${m.name}</div>
-        <div class="ip-tags">${m.boss ? `<span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span>${elementTag(m.element)}</div>
+        <div class="ip-tags">${m.boss ? `<span class="tag boss-tag">Boss</span>` : ""}<span class="tag">Lv ${m.tier}</span>${elementTag(m.element, true)}</div>
         <div class="ip-dim">${zone.icon} ${zone.name}</div>
       </div>
     </div>
