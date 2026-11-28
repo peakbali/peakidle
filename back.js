@@ -143,10 +143,21 @@
   if (useWatcher) {
     watch();
     window.addEventListener("pageshow", e => { if (e.persisted) watch(); });
-    return;
   }
 
-  // ---- Way 2 (other browsers and computers): a guard step in the history ----
+  // Small line in the settings menu so we can tell which way this phone is using.
+  const infoBox = document.getElementById("install-box");
+  if (infoBox) {
+    const line = document.createElement("p");
+    line.id = "back-mode";
+    line.className = "small back-mode";
+    line.textContent = `Back button: ${useWatcher ? "app mode" : "history mode"} (v58)`;
+    infoBox.appendChild(line);
+  }
+
+  // ---- Way 2 (other browsers and computers, and a safety net on Android): a guard step in the history ----
+  // On Android the close watcher above gets the back press first, so this only steps in
+  // if the watcher ever misses one.
   window.addEventListener("popstate", e => {
     if (isGuard(e.state)) return; // moved forward onto the guard step: nothing to do
     if (handleBack()) { armGuard(); return; }
