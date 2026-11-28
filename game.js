@@ -241,6 +241,7 @@ const STATUS = {
   stun:   { name: "Stun",   icon: "💫", turns: 1, skip: true, desc: "Dazed: loses the next turn." },
   shock:  { name: "Shock",  icon: "⚡", turns: 3, fail: 0.3,  desc: "30% chance to fail to act each turn." },
   weaken: { name: "Weaken", icon: "🥀", turns: 3, mult: 0.65, desc: "Deals 35% less damage." },
+  bleed:  { name: "Bleed",  icon: "🩸", turns: 3, maxStacks: 5, desc: "Loses a share of max HP at the end of each turn, for every stack. Stacks up to 5." },
   steady: { name: "Steady", icon: "🧱", turns: 2, desc: "Just shook off a freeze or stun: can't be frozen or stunned right now." },
 };
 // The status effect that goes with each element.
@@ -374,6 +375,20 @@ const NORMAL_TOUGHER = {
 // a level 6 boss hit about 500 into a hero with 9,000 HP. This multiplies their attack on top of
 // everything above. Monster HP is not changed.
 const MONSTER_ATTACK_BY_LEVEL = [1, 1, 1.3, 1.6, 1.8, 2, 2, 2, 2, 2];
+
+// Bleed: from danger level 3, monster attacks make you bleed. Each stack takes a share of your MAX HP at the
+// end of your turn, so it hurts just as much however strong you are: the difference is how fast you win.
+//   Bosses add 1 stack every attack (2 for a heavy attack). Normal monsters have a chance to add 1.
+//   Dodge and parry don't stop it. Healing Breeze washes it off; Frost Armor's guard blocks new stacks.
+//   Each new stack resets the 3-turn timer. Old fights in a save simply have no bleed yet.
+const BLEED = {
+  fromTier: 3,
+  perStack: 0.03,       // 3% of your max HP per stack, per turn
+  maxStacks: 5,         // so at most 15% per turn
+  normalChance: 0.3,    // normal monsters: 30% chance per attack to add a stack
+  bossStacks: 1,        // bosses: stacks per attack
+  bossHeavyStacks: 2,   // bosses: stacks per heavy attack
+};
 
 // Battle rules
 const BATTLE = {
@@ -1254,7 +1269,28 @@ function applyStatus(side, id, srcDamage = 0) {
   return true;
 }
 
-// End of `side`'s turn: burn and poison hurt, then every effect counts down by one.
+// The monster's attack makes you bleed (see BLEED). Works even if you dodged or parried the hit.
+function monsterBleeds(heavy) {
+  const b = state.battle, m = b.monster;
+  if (m.tier < BLEED.fromTier || b.heroHp <= 0) return;
+  const n = m.boss ? (heavy ? BLEED.bossHeavyStacks : BLEED.bossStacks) : (Math.random() < BLEED.normalChance ? 1 : 0);
+  if (!n) return;
+  if (b.guarding) { battleLog("🩸 Your ice shell keeps the wound from opening."); return; }
+  const fx = b.effects.hero;
+  const cur = fx.bleed && fx.bleed.turns > 0 ? fx.bleed : { stacks: 0 };
+  const before = cur.stacks;
+  cur.stacks = Math.min(BLEED.maxStacks, cur.stacks + n);
+  cur.turns = STATUS.bleed.turns;
+  fx.bleed = cur;
+  if (cur.stacks > before) {
+    battleLog(`🩸 You are bleeding (×${cur.stacks})!`);
+    battleFx("hero", `🩸 Bleed ×${cur.stacks}`, "status");
+  }
+}
+// What one turn of bleed costs: a share of max HP per stack.
+function bleedDamage(stacks, maxHp) { return Math.max(1, Math.round(maxHp * BLEED.perStack * stacks)); }
+
+// End of `side`'s turn: burn, poison and bleed hurt, then every effect counts down by one.
 function endOfTurnEffects(side) {
   const b = state.battle;
   const fx = b.effects[side];
@@ -1265,6 +1301,15 @@ function endOfTurnEffects(side) {
     else b.monsterHp = Math.max(0, b.monsterHp - e.dmg);
     battleLog(`${STATUS[id].icon} ${side === "hero" ? "You take" : `${b.monster.name} takes`} ${e.dmg} ${id} damage.`);
     battleFx(side, `-${e.dmg}`, id);
+  }
+  const bl = fx.bleed;
+  if (bl && bl.turns > 0 && bl.stacks > 0) {
+    const maxHp = side === "hero" ? b.hero.hp : b.monster.stats.hp;
+    const dmg = bleedDamage(bl.stacks, maxHp);
+    if (side === "hero") b.heroHp = Math.max(0, b.heroHp - dmg);
+    else b.monsterHp = Math.max(0, b.monsterHp - dmg);
+    battleLog(`🩸 ${side === "hero" ? "You bleed" : `${b.monster.name} bleeds`} for ${dmg} (×${bl.stacks}).`);
+    battleFx(side, `-${dmg}`, "bleed");
   }
   for (const [id, e] of Object.entries(fx)) {
     e.turns -= 1;
@@ -1402,7 +1447,7 @@ function castSkill(sk, level, m) {
     battleFx("hero", `+${b.heroHp - before}`, "heal");
   }
   if (sk.cleanse) {
-    const bad = ["burn", "poison", "frozen", "stun", "shock", "weaken"].filter(id => hasEffect("hero", id));
+    const bad = ["burn", "poison", "bleed", "frozen", "stun", "shock", "weaken"].filter(id => hasEffect("hero", id));
     for (const id of bad) delete b.effects.hero[id];
     if (bad.length) battleLog("The breeze washes away your status effects.");
   }
@@ -1498,6 +1543,7 @@ function monsterResolve(reaction = null) {
       }
       if (reaction === "parry" && b.heroHp > 0) heroAttack(REACTION.parryCounter, "You parry and counter");
     }
+    if (b.monsterHp > 0) monsterBleeds(heavy);
     // Every few turns the monster winds up a heavy attack for its next turn.
     if (!heavy && b.heroHp > 0 && b.turn % BATTLE.heavyEvery === BATTLE.heavyEvery - 1) {
       b.charging = true;
@@ -2491,8 +2537,9 @@ function statusChips(side) {
   const fx = state.battle.effects[side];
   return Object.entries(fx).filter(([, e]) => e.turns > 0).map(([id, e]) => {
     const st = STATUS[id];
-    const extra = id === "poison" && e.stacks > 1 ? `×${e.stacks} ` : "";
-    const dmg = e.dmg ? ` ${e.dmg} damage per turn.` : "";
+    const extra = (id === "poison" || id === "bleed") && e.stacks > 1 ? `×${e.stacks} ` : "";
+    const per = id === "bleed" ? bleedDamage(e.stacks, side === "hero" ? state.battle.hero.hp : state.battle.monster.stats.hp) : e.dmg;
+    const dmg = per ? ` ${per} damage per turn.` : "";
     return `<span class="st st-${id}" title="${st.name}: ${st.desc}${dmg} ${e.turns} turn${e.turns > 1 ? "s" : ""} left.">${st.icon}<span class="num">${extra}${e.turns}</span></span>`;
   }).join("");
 }
@@ -2522,7 +2569,7 @@ function renderBattle() {
   const youSprite = battlePart("youSprite"), foeSprite = battlePart("foeSprite");
   youSprite.classList.toggle("guarding", b.guarding && !b.result);
   for (const [sprite, side] of [[youSprite, "hero"], [foeSprite, "monster"]]) {
-    for (const id of ["frozen", "stun", "burn", "poison", "shock"]) sprite.classList.toggle(`is-${id}`, hasEffect(side, id));
+    for (const id of ["frozen", "stun", "burn", "poison", "bleed", "shock"]) sprite.classList.toggle(`is-${id}`, hasEffect(side, id));
   }
   foeSprite.classList.toggle("fainted", b.result === "win");
   foeSprite.classList.toggle("caught", b.result === "caught");
@@ -2639,7 +2686,7 @@ function battleSound(f) {
   const k = f.kind;
   if (k === "hit") sfx(f.side === "hero" ? "hurt" : "hit");
   else if (k === "crit") sfx(f.side === "hero" ? "hurt" : "crit");
-  else if (k === "burn" || k === "poison") sfx("tick");
+  else if (k === "burn" || k === "poison" || k === "bleed") sfx("tick");
   else if (k === "heal") sfx("heal");
   else if (k === "miss") sfx(f.text === "Broke free" ? "escape" : "miss");
   else if (k === "status" && f.text !== "Caught!") sfx("status");
@@ -2657,7 +2704,7 @@ function playBattleFx() {
     pop.style.marginLeft = `${[0, -36, 36][i % 3]}px`; // spread out numbers that land together
     box.appendChild(pop);
     setTimeout(() => pop.remove(), 1100);
-    if (["hit", "crit", "burn", "poison"].includes(f.kind)) restartAnim(sprite, "hurt");
+    if (["hit", "crit", "burn", "poison", "bleed"].includes(f.kind)) restartAnim(sprite, "hurt");
   }));
 }
 
