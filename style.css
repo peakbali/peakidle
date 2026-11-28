@@ -1581,7 +1581,9 @@ body.in-editor { overflow: hidden; }
 .mon-bg-earth     { --mc: #e0b070; --mc-soft: rgba(210, 160, 90, 0.3); }
 .mon-bg-lightning { --mc: #ffe14a; --mc-soft: rgba(255, 220, 70, 0.3); }
 
-.mon-art { display: block; width: 100%; height: 100%; transform-origin: 50% 92%; will-change: transform; }
+/* No filters or will-change on the moving picture: on some Android phones a filter over the animated
+   layers (blinking eyes, glow, particles) made the whole monster flash black now and then. */
+.mon-art { display: block; width: 100%; height: 100%; transform-origin: 50% 92%; }
 .mon-svg { display: block; width: 100%; height: 100%; }
 .mon-emoji { display: grid; place-items: center; font-size: 56px; line-height: 1; }
 /* Eyes blink now and then; magic (flames, crystals, runes) flickers */
@@ -1666,7 +1668,7 @@ body.in-editor { overflow: hidden; }
   box-shadow: inset 0 0 0 2px var(--outline), inset 0 0 0 4px #3a2e25, inset 4px 4px 0 4px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
-.mon-pic .mon-art { width: 100%; height: auto; aspect-ratio: 1; filter: drop-shadow(0 4px 2px rgba(0, 0, 0, 0.45)); }
+.mon-pic .mon-art { width: 100%; height: auto; aspect-ratio: 1; }
 .mon-body { display: grid; gap: 4px; align-content: start; min-width: 0; }
 .mon-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .mon-tags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1722,7 +1724,6 @@ body.in-editor { overflow: hidden; }
 }
 .boss-stage .mon-art {
   position: relative; z-index: 1; width: 92%; height: 92%;
-  filter: drop-shadow(0 0 12px var(--mc-soft)) drop-shadow(0 6px 4px rgba(0, 0, 0, 0.5));
 }
 .boss-aura {
   position: absolute; inset: 6%; border-radius: 50%; pointer-events: none;
