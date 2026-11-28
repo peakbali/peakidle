@@ -427,6 +427,11 @@
     lose(out, t) {
       [392, 330, 262].forEach((f, i) => tone(out, "triangle", f, t + i * 0.18, i === 2 ? 0.6 : 0.2, 0.12, 0.01, i === 2 ? 0.5 : 0.1));
     },
+    // Reroll: dice rattling, then a bright "pop" as the new monster shows up.
+    reroll(out, t) {
+      [0, 0.05, 0.1, 0.16].forEach(d => noiseHit(out, t + d, 0.04, 0.22, "bandpass", 2600 + Math.random() * 1200, 1800, 3));
+      tone(out, "square", 660, t + 0.22, 0.12, 0.06, 0.003, 0.08, false, 1320);
+    },
     // Caught a monster: sparkles.
     catch(out, t) {
       [1047, 1319, 1568, 2093, 2637].forEach((f, i) => tone(out, "sine", f, t + i * 0.05, 0.3, 0.07, 0.003, 0.25));
