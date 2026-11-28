@@ -327,7 +327,7 @@ const ELEMENT_ADJECTIVE = { fire: "Blazing", ice: "Frozen", wind: "Gusting", ear
 const SPAWN = {
   max: 3,                 // 3 monsters wait at once. Beat (or catch) one and a new one takes its place right away.
   newRun: 3,              // a new game or reincarnation starts with 3 monsters already waiting
-  lowerTierChance: 0.4,   // 40% of spawns are one tier below yours (from tier 2 up), for variety
+  lowerTierChance: 0.3,   // 30% of spawns are one tier below yours (from tier 2 up), for variety; 70% are your tier
 };
 
 // Monster stats grow exponentially with tier: stat = start * growth ^ step.
@@ -340,7 +340,9 @@ const MONSTER_SCALING = {
   coins:   { start: 10,  growth: 1.4 }, // coins for a win
   drops:   { start: 1,   growth: 1.2 },  // element drops for a win
 };
-const BOSS_MULT = { hp: 1.6, attack: 1.15, defense: 1.15, agility: 1.1, coins: 3, drops: 3 };
+// Bosses: hp was 1.6 and attack 1.15 before normal monsters got tougher (see NORMAL_TOUGHER); raised a
+// little so a boss is still clearly stronger than the normal monsters of its level.
+const BOSS_MULT = { hp: 1.75, attack: 1.22, defense: 1.15, agility: 1.1, coins: 3, drops: 3 };
 
 // From danger level 5 on, monster HP, attack and defense grow at the same speed as the gear of the
 // matching ore (danger level N goes with ore N), so a hero in that ore's gear always has a fair fight.
@@ -351,6 +353,20 @@ const LATE_TIERS = {
   hp: 0.6,       // 60% of what the level 4 numbers grown by gear would give: level 5 boss ~4,100 HP
   attack: 1.0,
   defense: 1.0,
+};
+
+// Normal (non-boss) monsters are tougher than the formulas above give. Players found that after a few
+// gear and skill upgrades they beat every normal monster in one hit (a level-1 Meteor did more than a
+// normal monster's whole HP). These multiply normal monsters only (bosses got a smaller bump in BOSS_MULT).
+//   hp: one number per danger level (1-10). Level 4 gets less because its monsters were already the
+//       toughest for their gear.
+//   With gear of your danger level and level-1 skills, a normal fight now takes about 3-12 turns
+//   instead of 1-7, and a Meteor one-shot needs gear about one ore ahead.
+//   Coins and drops for a win are not changed.
+const NORMAL_TOUGHER = {
+  hp: [1.7, 1.7, 1.7, 1.3, 1.7, 1.7, 1.7, 1.7, 1.7, 1.7],
+  attack: 1.3,   // they hit harder, so a fight costs some HP
+  defense: 1.15,
 };
 
 // Battle rules
@@ -429,11 +445,12 @@ function monsterStats(tier, boss) {
     const gear = ORES[tier - 1].statMult / ORES[base - 1].statMult;
     return grow(key, step - 5 * (tier - base)) * gear * LATE_TIERS[key];
   };
+  const tough = key => boss ? 1 : key === "hp" ? NORMAL_TOUGHER.hp[tier - 1] || 1 : NORMAL_TOUGHER[key] || 1;
   return {
     stats: {
-      hp: Math.round(stat("hp")),
-      attack: Math.round(stat("attack")),
-      defense: Math.round(stat("defense")),
+      hp: Math.round(stat("hp") * tough("hp")),
+      attack: Math.round(stat("attack") * tough("attack")),
+      defense: Math.round(stat("defense") * tough("defense")),
       agility: Math.round(stat("agility")),
     },
     reward: { coins: Math.round(stat("coins")), drops: Math.round(stat("drops")) },
