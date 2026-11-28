@@ -7,8 +7,9 @@
 // you tap Collect, so it is safe when you reincarnate.
 //
 // You can release a farm animal (tap it, then Release twice). One copy leaves the farm; if it was the
-// last of its kind, that kind stops making essence. Your Bestiary and its bonuses don't change, and
-// catching it again brings one back.
+// last of its kind, that kind stops making essence. The farm and the Bestiary always match: releasing
+// also takes one off its Bestiary count (milestones you already reached stay, with their bonus).
+// Catching it again brings one back.
 //
 // Loaded before game.js. Uses state, ELEMENTS, TIERS, monsterArtHTML ... only when called.
 
@@ -18,10 +19,11 @@ const FARM = {
 };
 const FARM_DAY_MS = 24 * 60 * 60 * 1000;
 
-function freshFarm() { return { owned: false, last: 0, stash: {}, released: {} }; }
+function freshFarm() { return { owned: false, last: 0, stash: {} }; }
 
-// released: "creature|element" -> how many copies were let go.
-// bestiary is the loaded Bestiary, so old saves (released = true, "all of them") keep them gone.
+// bestiary is the loaded Bestiary. Older saves kept released monsters in a separate list
+// ("creature|element" -> how many, or true = all); those are now taken off the Bestiary instead,
+// so the farm and the Bestiary show the same monsters.
 function normalizeFarm(saved, bestiary = {}) {
   const f = freshFarm();
   if (!saved || typeof saved !== "object") return f;
@@ -35,7 +37,7 @@ function normalizeFarm(saved, bestiary = {}) {
     const [key, el] = id.split("|");
     const caught = (bestiary[key] && bestiary[key].el && bestiary[key].el[el]) || 0;
     const n = v === true ? caught : Math.floor(Number(v) || 0);
-    if (n > 0) f.released[id] = Math.min(n, caught);
+    if (n > 0) farmTakeFromBestiary(bestiary, key, el, Math.min(n, caught));
   }
   return f;
 }
@@ -48,7 +50,7 @@ function farmKinds() {
     const entry = state.bestiary[c.key];
     if (!entry || !entry.el) continue;
     for (const e of ELEMENTS) {
-      const count = (entry.el[e.id] || 0) - farmReleased(`${c.key}|${e.id}`);
+      const count = entry.el[e.id] || 0;
       if (count > 0) out.push({ ...c, element: e.id, count });
     }
   }
@@ -62,7 +64,15 @@ function farmAnimals() {
   return out;
 }
 
-function farmReleased(id) { return (state.farm && state.farm.released && state.farm.released[id]) || 0; }
+// Take n catches of a creature in one element off the Bestiary (used by Release).
+function farmTakeFromBestiary(bestiary, key, el, n = 1) {
+  const e = bestiary && bestiary[key];
+  if (!e || !e.el || !(e.el[el] > 0)) return;
+  const k = Math.min(n, e.el[el]);
+  e.el[el] -= k;
+  if (e.el[el] <= 0) delete e.el[el];
+  e.caught = Math.max(0, (e.caught || 0) - k);
+}
 
 // Kept so recordCatch can tell the farm about a catch: a new catch adds a copy all by itself.
 function farmWelcomeBack() {}
@@ -95,7 +105,7 @@ function farmTick(now = Date.now()) {
 function farmSignature() {
   let s = "";
   for (const [k, v] of Object.entries(state.bestiary || {})) if (v && v.el) s += k + JSON.stringify(v.el) + ";";
-  return s + "|" + JSON.stringify((state.farm && state.farm.released) || {});
+  return s;
 }
 
 function buyFarm() {
@@ -487,9 +497,10 @@ function farmReleaseTap() {
     return;
   }
   farmTick(); // count what it made up to now
-  state.farm.released[c.kind] = farmReleased(c.kind) + 1;
+  const [key, el] = c.kind.split("|");
+  farmTakeFromBestiary(state.bestiary, key, el, 1);
   farmSelect(null);
-  log(`You released a ${c.name}. Bye bye! Catch it again to bring it back to the farm.`);
+  log(`You released a ${c.name}. Bye bye! Catch it again to bring it back.`);
   const now = performance.now();
   c.leaving = true;
   farmWalk(c, c.x < 0.5 ? -0.3 : 1.3, c.y, now, 60);
