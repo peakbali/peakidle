@@ -369,6 +369,12 @@ const NORMAL_TOUGHER = {
   defense: 1.15,
 };
 
+// Monster attack by danger level (1-10), for normal monsters and bosses. Hero HP and defense grow
+// faster than monster attack (gear, Soul attributes, boons), so from level 3 up monsters hit too softly:
+// a level 6 boss hit about 500 into a hero with 9,000 HP. This multiplies their attack on top of
+// everything above. Monster HP is not changed.
+const MONSTER_ATTACK_BY_LEVEL = [1, 1, 1.3, 1.6, 1.8, 2, 2, 2, 2, 2];
+
 // Battle rules
 const BATTLE = {
   startMana: 3,
@@ -449,7 +455,7 @@ function monsterStats(tier, boss) {
   return {
     stats: {
       hp: Math.round(stat("hp") * tough("hp")),
-      attack: Math.round(stat("attack") * tough("attack")),
+      attack: Math.round(stat("attack") * tough("attack") * (MONSTER_ATTACK_BY_LEVEL[tier - 1] || 1)),
       defense: Math.round(stat("defense") * tough("defense")),
       agility: Math.round(stat("agility")),
     },
