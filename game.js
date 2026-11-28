@@ -2045,12 +2045,11 @@ function monsterCard(m) {
       <div class="mon-body">
         <div class="mon-name"><span class="name" data-info="mon:${m.uid}">${m.name}</span>
           <span class="tag${lower ? " tier-low" : ""}" title="Danger level of this monster">Lv ${m.tier}</span></div>
-        <div class="mon-tags">${elementTag(m.element)}${chestButton(m)}</div>
+        <div class="mon-tags">${elementTag(m.element)}${chestButton(m)}<button data-k="reroll" class="reroll-btn" title="Reroll: swap for a new monster of a different element" aria-label="Reroll">${pxIcon("reroll")}</button></div>
         <div class="mon-reward" data-k="reward" hidden>🎁 Win: ${rewardText(m)}</div>
         ${weakLine(m)}
         ${statsLine(m)}
-        <div class="buttons"><button data-k="fight" class="primary">Fight</button>
-          <button data-k="reroll" class="reroll" title="Swap for a new monster of a different element">${pxIcon("reroll", "ti")} Reroll</button></div>
+        <div class="buttons"><button data-k="fight" class="primary">Fight</button></div>
       </div>
     </div>`);
   card.dataset.uid = m.uid;
