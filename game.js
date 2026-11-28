@@ -241,7 +241,7 @@ const STATUS = {
   stun:   { name: "Stun",   icon: "💫", turns: 1, skip: true, desc: "Dazed: loses the next turn." },
   shock:  { name: "Shock",  icon: "⚡", turns: 3, fail: 0.3,  desc: "30% chance to fail to act each turn." },
   weaken: { name: "Weaken", icon: "🥀", turns: 3, mult: 0.65, desc: "Deals 35% less damage." },
-  bleed:  { name: "Bleed",  icon: "🩸", turns: 3, maxStacks: 5, desc: "Loses a share of max HP at the end of each turn, for every stack. Stacks up to 5." },
+  bleed:  { name: "Bleed",  icon: "🩸", turns: 3, maxStacks: 3, desc: "Loses a share of max HP at the end of each turn, for every stack. Stacks up to 3." },
   steady: { name: "Steady", icon: "🧱", turns: 2, desc: "Just shook off a freeze or stun: can't be frozen or stunned right now." },
 };
 // The status effect that goes with each element.
@@ -384,7 +384,7 @@ const MONSTER_ATTACK_BY_LEVEL = [1, 1, 1.3, 1.6, 1.8, 2, 2, 2, 2, 2];
 const BLEED = {
   fromTier: 3,
   perStack: 0.03,       // 3% of your max HP per stack, per turn
-  maxStacks: 5,         // so at most 15% per turn
+  maxStacks: 3,         // so at most 9% per turn (was 5; Khen found 5 too hard)
   normalChance: 0.3,    // normal monsters: 30% chance per attack to add a stack
   bossStacks: 1,        // bosses: stacks per attack
   bossHeavyStacks: 2,   // bosses: stacks per heavy attack
