@@ -796,6 +796,7 @@ body.in-battle { overflow: hidden; }
 }
 .st-burn   { border-color: #e8673a; }
 .st-poison { border-color: #9a63d9; }
+.st-bleed  { border-color: #d0303a; }
 .st-frozen { border-color: #8fd3ff; }
 .st-stun   { border-color: #e6d36a; }
 .st-shock  { border-color: #f0e05a; }
@@ -828,6 +829,7 @@ body.in-battle { overflow: hidden; }
 .bt-sprite.guarding { filter: drop-shadow(0 0 14px rgba(163, 155, 143, 0.9)); }
 .bt-sprite.is-frozen { filter: saturate(0.2) brightness(1.2) drop-shadow(0 0 12px #8fd3ff); }
 .bt-sprite.is-burn   { filter: drop-shadow(0 0 10px #e8673a); }
+.bt-sprite.is-bleed  { filter: drop-shadow(0 0 8px #d0303a); }
 .bt-sprite.is-poison { filter: drop-shadow(0 0 10px #9a63d9); }
 .bt-sprite.is-shock  { filter: drop-shadow(0 0 10px #f0e05a); }
 .bt-sprite.is-stun   { animation: bt-wobble 1.2s ease-in-out infinite; }
@@ -861,6 +863,7 @@ body.in-battle { overflow: hidden; }
 .pop-status { color: #d8b6ff; font-size: 17px; }
 .pop-burn   { color: #ff9a5c; }
 .pop-poison { color: #c58cff; }
+.pop-bleed  { color: #ff5a5f; }
 @keyframes bt-pop {
   0% { opacity: 0; transform: translate(-50%, 10px) scale(0.8); }
   15% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }

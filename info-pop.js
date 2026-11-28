@@ -131,6 +131,9 @@ function monsterInfoHTML(m, live) {
     `💥 <b>Heavy attack</b> every ${BATTLE.heavyEvery}rd turn: ×${BATTLE.heavyMultiplier} damage, can stun. Dodge it!`,
   ];
   if (m.boss) moves.push(`📯 <b>War cry</b>: sometimes roars to 🥀 weaken you`);
+  if (m.tier >= BLEED.fromTier) moves.push(m.boss
+    ? `🩸 <b>Bleed</b>: every attack adds a stack (heavy: ${BLEED.bossHeavyStacks}), even if you dodge or parry. Each stack costs ${ipPct(BLEED.perStack)} of your max HP per turn, up to ${BLEED.maxStacks} stacks`
+    : `🩸 <b>Bleed</b>: ${ipPct(BLEED.normalChance)} chance per attack to add a stack, even if you dodge or parry. Each stack costs ${ipPct(BLEED.perStack)} of your max HP per turn, up to ${BLEED.maxStacks} stacks`);
 
   const fight = [
     ipRow("Your sword", `about <b>${fmt(yourHit)}</b> per hit <span class="ip-dim">(${Math.max(1, Math.ceil((live ? b.monsterHp : m.stats.hp) / yourHit))} hits)</span>`),

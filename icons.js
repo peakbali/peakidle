@@ -438,6 +438,24 @@ const PX_ICONS = {
     "................",
     "................",
   ],
+  blood: [
+    "................",
+    ".......R........",
+    ".......R........",
+    "......RrR.......",
+    "......RrR.......",
+    ".....RrrrR......",
+    "....RlrrrrR.....",
+    "....RlrrrrR.....",
+    "...RlrrrrrrR....",
+    "...RlrrrrrrR....",
+    "...RrrrrrrrR....",
+    "....RrrrrrR.....",
+    ".....RRRRR......",
+    "................",
+    "................",
+    "................",
+  ],
   drop: [
     "................",
     ".......i........",
@@ -1030,7 +1048,7 @@ const EMOJI_ICONS = {
   // elements
   "🔥": "fire", "❄": "snow", "🌪": "tornado", "🪨": "rock", "⚡": "bolt",
   // status effects
-  "☠": "skull", "🧊": "cube", "💫": "dizzy", "🥀": "wilt", "🧱": "brick",
+  "☠": "skull", "🩸": "blood", "🧊": "cube", "💫": "dizzy", "🥀": "wilt", "🧱": "brick",
   // money, menu and the rest
   "🪙": "coin", "👻": "souls", "⛏": "mine", "🔨": "forge", "⬆": "upgrades", "📜": "merchant",
   "💧": "drop", "🎁": "gift", "🏆": "trophy", "🏃": "run", "⚠": "warn", "👑": "crown", "💥": "boom",
