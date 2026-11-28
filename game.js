@@ -124,7 +124,7 @@ const ANVIL   = { start: 300, growth: 5 };      // anvil level 1 -> 2 costs 300,
 
 // ---------- Reincarnation and Souls ----------
 // Reincarnating starts a new run: coins, ore, miners, mines, upgrades, gear, essences and monster
-// progress reset. You keep learned skills, Souls and attributes, and you earn new Souls.
+// progress reset. You keep learned skills (back at level 1), Souls and attributes, and earn new Souls.
 const REINCARNATION = {
   priceGrowth: 1.10,     // every reincarnation makes miners, mines and upgrades 10% pricier (stacks).
                          //   Skill prices never go up with reincarnation.
@@ -1692,8 +1692,11 @@ function buyBoon(id) {
 function reincarnate() {
   if (state.battle) return; // finish the fight first
   const gained = soulsPreview().total;
+  // Learned skills stay learned but go back to level 1 (the essence spent on levels is not refunded).
+  const skills = {};
+  for (const [id, lvl] of Object.entries(state.skills)) skills[id] = lvl > 0 ? 1 : 0;
   const keep = {
-    skills: state.skills,
+    skills,
     skillSlots: state.skillSlots,
     attributes: state.attributes,
     mastery: state.mastery,
@@ -3020,7 +3023,7 @@ function buildSouls() {
       <div class="confirm" data-k="confirm" hidden>
         <div class="name">Are you sure?</div>
         <div class="small"><b>You lose:</b> coins, ore, miners, opened mines, pickaxe and anvil upgrades, Run Boons, all gear (in your bag and equipped), unspent essences, danger level and waiting monsters.</div>
-        <div class="small"><b>You keep:</b> learned skills and their levels, skill slots, Element Mastery, Souls and attributes.</div>
+        <div class="small"><b>You keep:</b> learned skills (they go back to level 1), skill slots, Element Mastery, Souls and attributes.</div>
         <div class="small"><b>Next run:</b> <span data-k="nextPrices"></span></div>
         <div class="buttons">
           <button class="primary" data-k="yes"></button>
