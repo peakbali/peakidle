@@ -536,6 +536,7 @@ function freshState() {
     milestones: {},       // Bestiary milestones reached: id -> when (kept forever, see BESTIARY_REWARDS)
     milestonesNew: [],    // milestones reached but not celebrated yet (the Congratulations window shows them)
     welcomed: false,      // has seen the Welcome window (it opens once by itself, then from the [?] button)
+    bossBook: {},         // bosses: id -> { wins, caught } (farm.js), kept forever
     farm: freshFarm(),    // Monster Farm (farm.js): bought with Souls, kept forever, its essence waits to be collected
     rerolls: freshRerolls(), // monster rerolls left and when the next one comes back (see REROLL), kept on reincarnate
     lastSaved: Date.now(),
@@ -755,6 +756,7 @@ function load() {
     checkMilestones(s); // anything already reached (older saves) is added and celebrated once
     s.profile = normalizeProfile(saved.profile);
     s.farm = normalizeFarm(saved.farm, s.bestiary);
+    s.bossBook = normalizeBossBook(saved.bossBook, s.bossesBeaten);
     s.rerolls = normalizeRerolls(saved.rerolls);
     if (saved.battle && saved.battle.monster) s.battle = normalizeBattle(saved.battle);
   } catch (e) {
@@ -798,7 +800,8 @@ function sellPrice(recipe) { return Math.floor(recipe.price * priceMultiplier())
 // Flat stat bonus from Soul attributes, e.g. { hp: 50, attack: 3, ... }.
 function attributeStats() {
   const total = {};
-  for (const a of ATTRIBUTES) total[a.id] = (state.attributes[a.id] || 0) * a.perPoint;
+  const boss = bossAttrStats(); // free points from caught bosses (farm.js)
+  for (const a of ATTRIBUTES) total[a.id] = (state.attributes[a.id] || 0) * a.perPoint + boss[a.id];
   return total;
 }
 
@@ -1037,10 +1040,11 @@ function normalizeBestiary(saved) {
 
 // Chance (0-1) that Catch works right now.
 function catchChance(b = state.battle) {
-  if (!b || b.monster.boss) return 0;
+  if (!b || (b.monster.boss && !bossCatchable(b.monster))) return 0;
   const lost = 1 - b.monsterHp / b.monster.stats.hp;
   let c = CATCH.base + CATCH.fromHpLost * lost + CATCH.luckShare * (b.hero.luck || 0) / 100;
   if (hasEffect("monster", "frozen") || hasEffect("monster", "stun")) c += CATCH.helpless;
+  if (b.monster.boss) c *= BOSS_CATCH.chance; // bosses are harder (and only after 5 wins)
   return Math.max(0, Math.min(CATCH.max, c));
 }
 
@@ -1237,7 +1241,7 @@ function startBattle(uid) {
     hero: { ...hero, weapon: state.equipped.weapon ? state.equipped.weapon.id : null },
     // Skills you brought, with their level, locked in like your stats.
     skills: state.skillSlots.map(id => id ? { id, level: skillLevel(id) } : null),
-    mastery: { ...state.mastery }, // Element Mastery levels, locked in too
+    mastery: Object.fromEntries(ELEMENTS.map(e => [e.id, masteryLevel(e.id) + bossMastery(e.id)])), // Element Mastery (bought + caught bosses), locked in too
     effects: { hero: {}, monster: {} }, // status effects: id -> { turns, dmg, stacks }
     heroHp: hero.hp,
     monsterHp: m.stats.hp,
@@ -1438,7 +1442,7 @@ function battleAction(action) {
       sk = slot && skillById[slot.id];
       if (!sk || b.mana < skillGrade(sk).mana) return false;
     }
-    if (action === "catch" && m.boss) return false; // bosses can't be caught
+    if (action === "catch" && m.boss && !bossCatchable(m)) return false; // bosses: only after 5 wins
     if (hasEffect("hero", "shock") && Math.random() < STATUS.shock.fail) {
       battleLog("⚡ You're shocked and your body won't move!");
       battleFx("hero", "⚡ Shocked", "status");
@@ -1627,7 +1631,8 @@ function endBattle(result) {
   const m = b.monster;
   b.result = result;
   b.pending = null;
-  if (result === "caught") recordCatch(m);
+  if (result === "caught" && !m.boss) recordCatch(m);
+  if (m.boss && (result === "win" || result === "caught")) recordBossWin(m, result === "caught");
   // A short wait so the last hit's sound plays first.
   const endSound = { win: "win", caught: "catch", lose: "lose" }[result];
   if (endSound && typeof setTimeout !== "undefined") setTimeout(() => sfx(endSound), 350);
@@ -1767,6 +1772,7 @@ function reincarnate() {
     milestonesNew: state.milestonesNew,
     welcomed: state.welcomed,
     farm: state.farm, // the Monster Farm and the essence waiting in it
+    bossBook: state.bossBook, // boss wins and catches
     rerolls: state.rerolls, // rerolls refill by the clock, so reincarnating doesn't refill them
   };
   state = Object.assign(freshState(), keep);
@@ -2432,7 +2438,7 @@ function closeBestiary() {
 function renderBestiary() {
   const box = document.getElementById("bestiary");
   if (!box || box.hidden) return;
-  const key = JSON.stringify(state.bestiary) + Object.keys(state.milestones).length;
+  const key = JSON.stringify(state.bestiary) + JSON.stringify(state.bossBook) + Object.keys(state.milestones).length;
   if (key === bestiaryShown) return;
   bestiaryShown = key;
   const { caught, kinds, total } = bestiaryCounts();
@@ -2479,9 +2485,33 @@ function renderBestiary() {
           <li>Complete the Bestiary (all 40 kinds in all 5 colors): <b>${bonusText(BESTIARY_REWARDS.complete)}</b></li>
         </ul>
       </details>
+      ${bossBestiaryHTML()}
       ${sections}
     </div>`);
   box.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeBestiary));
+}
+
+// The Bosses part of the Bestiary: how often you beat each boss, and the ones you caught.
+function bossBestiaryHTML() {
+  const cards = bossList().map(bs => {
+    const wins = bossWins(bs.id), caught = bossCaught(bs.id);
+    const met = wins > 0 || bs.tier <= currentTier();
+    const m = bossMonster(bs.tier);
+    const status = caught ? `Caught ×${fmt(caught)}`
+      : wins >= BOSS_CATCH.wins ? "Can be caught!"
+      : `${Math.min(wins, BOSS_CATCH.wins)}/${BOSS_CATCH.wins} to catch`;
+    return `
+      <div class="bs-card bs-boss${caught ? " got" : wins ? "" : " missing"}" title="${met ? bs.name : "???"}: beaten ${wins} time${wins === 1 ? "" : "s"}">
+        <div class="bs-pic${wins ? ` mon-bg-${bs.element}` : ""}">${monsterArtHTML(m)}</div>
+        <div class="bs-name">${met ? bs.name : "???"}</div>
+        <div class="bs-count small num">Beaten ×${fmt(wins)}</div>
+        <div class="bs-boss-status small${caught ? " got" : wins >= BOSS_CATCH.wins ? " ready" : ""}">${status}</div>
+      </div>`;
+  }).join("");
+  const n = caughtBosses().length;
+  return `<div class="bs-zone"><span class="tag">Bosses</span> <span class="bs-zone-name">${n} / ${TIERS.length} caught</span></div>
+    <div class="small bs-boss-note">Beat a boss ${BOSS_CATCH.wins} times and you can catch it. Each boss you catch lives in your Monster Farm, makes 1 essence an hour, and gives +${BOSS_CATCH.attrPoints} to every attribute and +${BOSS_CATCH.mastery} Element Mastery in its element.</div>
+    <div class="bs-grid bs-boss-grid">${cards}</div>`;
 }
 
 // The info window for a Bestiary card ("best:<key>"). Uses the normal monster window once it's caught.
@@ -2672,7 +2702,7 @@ function renderBattleMenu() {
         <button class="primary big" data-k="close">Back to Adventure</button>
       </div>`);
     battlePart("close").onclick = closeBattle;
-    if (b.result === "win" && m.boss) showBossVictory();
+    if ((b.result === "win" || b.result === "caught") && m.boss) showBossVictory();
     return;
   }
 
@@ -2697,8 +2727,8 @@ function renderBattleMenu() {
     }).join("");
     html = `
       <button class="primary" data-a="attack" ${myTurn ? "" : "disabled"}>⚔️ Attack</button>
-      ${m.boss
-        ? `<button class="catch" disabled title="Bosses are too strong to catch">🪤 Catch <span class="small">Boss</span></button>`
+      ${m.boss && !bossCatchable(m)
+        ? `<button class="catch" disabled title="Beat this boss ${BOSS_CATCH.wins} times to be able to catch it">🪤 Catch <span class="small num">${bossWins(m.art)}/${BOSS_CATCH.wins} wins</span></button>`
         : `<button class="catch" data-a="catch" ${myTurn ? "" : "disabled"} title="Try to catch it for your Bestiary. Easier when its HP is low. Uses your turn.">🪤 Catch <span class="small num">${Math.round(catchChance(b) * 100)}%</span></button>`}
       ${skills}`;
   }
@@ -2732,16 +2762,17 @@ function showBossVictory() {
       <div class="vic-confetti">${confetti}</div>
       <div class="vic-card">
         <div class="vic-kicker">Congratulations!</div>
-        <div class="vic-title">Victory!</div>
+        <div class="vic-title">${b.result === "caught" ? "Caught!" : "Victory!"}</div>
         <div class="vic-stage">
           <div class="vic-burst"></div>
           ${monsterArtHTML(m, "vic-boss")}
-          <div class="vic-stamp">Defeated</div>
+          <div class="vic-stamp">${b.result === "caught" ? "Caught" : "Defeated"}</div>
         </div>
-        <div class="vic-msg">You defeated <b>${m.name}</b>${info.title ? `, ${info.title.charAt(0).toLowerCase() + info.title.slice(1)}` : ""}!</div>
+        <div class="vic-msg">You ${b.result === "caught" ? "caught" : "defeated"} <b>${m.name}</b>${info.title ? `, ${info.title.charAt(0).toLowerCase() + info.title.slice(1)}` : ""}!${b.result === "caught" ? " It moves into your Monster Farm." : ""}</div>
         <div class="vic-rewards">
           <div class="vic-row"><span>${e.icon} ${e.drop}</span><span class="num">+${m.reward.drops}</span></div>
           <div class="vic-row"><span>🪙 Coins</span><span class="num">+${fmt(m.reward.coins)}</span></div>
+          ${b.result === "caught" && bossCaught(m.art) === 1 ? `<div class="vic-row new"><span>👻 Every attribute</span><span>+${BOSS_CATCH.attrPoints} points</span></div><div class="vic-row new"><span>${e.icon} ${e.name} Mastery</span><span>+${BOSS_CATCH.mastery} level</span></div>` : ""}
           ${unlock}
         </div>
         <button class="primary big wide" data-k="vicClose">Continue</button>
@@ -3153,7 +3184,7 @@ function buildMastery(box) {
     const card = el(`
       <div class="card attr up-card" data-el="${e.id}">
         <div class="row">
-          <span class="name">${e.icon} ${e.name} Mastery <span class="small num">Lv <span data-k="lvl"></span>/${MASTERY.max}</span></span>
+          <span class="name">${e.icon} ${e.name} Mastery <span class="small num">Lv <span data-k="lvl"></span>/${MASTERY.max}<span data-k="bossLvl"></span></span></span>
           <span class="stats-line" data-k="bonus"></span>
         </div>
         <div class="small">+${Math.round(MASTERY.damage * 100)}% ${e.name.toLowerCase()} damage per level. ${st.icon} ${st.name}: +${Math.round(MASTERY.statusChance * 100)}% chance${dot ? ` and +${Math.round(MASTERY.dot * 100)}% damage` : ""} per level.</div>
@@ -3196,8 +3227,10 @@ function renderUpgrades() {
   for (const e of ELEMENTS) {
     const card = refs.mastery[e.id];
     const lvl = masteryLevel(e.id);
+    const fromBoss = bossMastery(e.id), total = lvl + fromBoss;
     set(card, "lvl", String(lvl));
-    set(card, "bonus", lvl > 0 ? `+${Math.round(lvl * MASTERY.damage * 100)}% dmg` : "");
+    set(card, "bossLvl", fromBoss ? ` +${fromBoss} boss` : "");
+    set(card, "bonus", total > 0 ? `+${Math.round(total * MASTERY.damage * 100)}% dmg` : "");
     const btn = card.querySelector('[data-k="buy"]');
     const maxed = lvl >= MASTERY.max;
     const cost = masteryCost(e.id);
@@ -3486,7 +3519,9 @@ function render() {
   for (const st of STATS) {
     const parts = [];
     if (gear[st.id] > 0) parts.push(`+${fmt(gear[st.id])} gear`);
-    if (attrs[st.id] > 0) parts.push(`+${fmt(attrs[st.id])} souls`);
+    const fromBoss = bossAttrStats()[st.id] || 0;
+    if (attrs[st.id] - fromBoss > 0) parts.push(`+${fmt(attrs[st.id] - fromBoss)} souls`);
+    if (fromBoss > 0) parts.push(`+${fmt(fromBoss)} bosses`);
     if (fromBestiary[st.id] > 0) parts.push(`+${fmt(fromBestiary[st.id])} bestiary`);
     const boon = hero[st.id] - HERO_BASE_STATS[st.id] - gear[st.id] - (attrs[st.id] || 0) - fromBestiary[st.id];
     if (boon > 0) parts.push(`+${fmt(boon)} boons`);

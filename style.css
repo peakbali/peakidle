@@ -2293,3 +2293,10 @@ body.in-battle #panel-adventure * { animation-play-state: paused !important; }
 /* Monster Farm: the Release bar under the pen */
 .farm-pick { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: -4px 2px 8px; }
 .farm-pick .buttons { margin: 0; }
+
+/* Boss Bestiary (bossBestiaryHTML in game.js) */
+.bs-boss-note { margin: 2px 0 6px; }
+.bs-boss .bs-pic .mon-art { transform: scale(0.95); }
+.bs-boss-status { line-height: 1.1; }
+.bs-boss-status.ready { color: var(--accent-hi); }
+.bs-boss-status.got { color: var(--good); }
